@@ -33,11 +33,18 @@
 (function () {
   "use strict";
   var W = 5, H = 4, CELL = 64;
-  var plant = "keywall";
-  try {
-    var q = new URLSearchParams(location.search);
-    if (q.get("plant")) plant = q.get("plant");
-  } catch (_) {}
+  function armParam(name, dflt) {
+    try {
+      var injected = window.__GSPP_ARM__;
+      if (injected && injected[name] !== undefined && injected[name] !== null) return String(injected[name]);
+    } catch (_) {}
+    try {
+      var v = new URLSearchParams(location.search).get(name);
+      if (v !== null && v !== "") return v;
+    } catch (_) {}
+    return dflt;
+  }
+  var plant = armParam("plant", "keywall");
 
   var WALLS = {};
   function k(x, y) { return x + "," + y; }

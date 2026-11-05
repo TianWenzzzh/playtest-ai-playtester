@@ -73,9 +73,18 @@
   var door = document.getElementById("b-door");
   door.addEventListener("mouseenter", function () { door.style.borderColor = "#7a6cff"; });
 
-  var qs = {};
-  try { qs = Object.fromEntries(new URLSearchParams(location.search).entries()); } catch (_) {}
-  if (qs.plant === "none") {
+  function armParam(name, dflt) {
+    try {
+      var injected = window.__GSPP_ARM__;
+      if (injected && injected[name] !== undefined && injected[name] !== null) return String(injected[name]);
+    } catch (_) {}
+    try {
+      var v = new URLSearchParams(location.search).get(name);
+      if (v !== null && v !== "") return v;
+    } catch (_) {}
+    return dflt;
+  }
+  if (armParam("plant", "deadend") === "none") {
     door.addEventListener("click", function () {
       log("门开了，里面是宝藏。");
       document.getElementById("room").textContent = "宝藏间";

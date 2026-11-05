@@ -48,13 +48,40 @@ def url_for(game: str, arm: str) -> str:
 
 
 def web_url_for(game: str, arm: str) -> str:
-    """给 iframe 用的地址。
-
-    🔴 不能用 file:// —— 创空间是 https 页面，浏览器会拦掉 file: 子框架。
-    走 Gradio 自己的 /gradio_api/file= 路由，配合 launch(allowed_paths=...) 放行。
-    """
     abs_path = str((GAMES_DIR / game / "index.html").resolve())
     return f"/gradio_api/file={abs_path}{arm}"
+
+
+def _arm_dict(arm: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for part in arm.lstrip("?").split("&"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k] = v
+    return out
+
+
+def embed(game: str, arm: str) -> str:
+    """把夹具内联进 iframe，而不是让它去请求一个文件 URL。
+
+    🔴 实测原因：`launch(allowed_paths=...)` 并没能放行 /gradio_api/file=，
+    浏览器拿到 403 ⇒ 演示页只剩一个空壳，而服务本身看起来完全正常。
+    这种"服务活着、内容全 403"的失败在本地点一下就能看见，在部署后才看见就晚了。
+
+    臂的开关改成随 HTML 一起注入（window.__GSPP_ARM__），
+    因为内联文档没有 query string 可用。
+    """
+    import html as _html
+
+    path = GAMES_DIR / game / "index.html"
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    inject = f"<script>window.__GSPP_ARM__={json.dumps(_arm_dict(arm))};</script>"
+    if "<head>" in raw:
+        raw = raw.replace("<head>", "<head>" + inject, 1)
+    else:
+        raw = inject + raw
+    return (f'<iframe srcdoc="{_html.escape(raw, quote=True)}" width="100%" height="380" '
+            f'style="border:1px solid #cbd5e1;border-radius:8px;background:#fff"></iframe>')
 
 
 def _state_table(data: Any) -> str:
@@ -97,14 +124,13 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         if res.error:
             return f"❌ 运行出错：`{res.error}`", "", "", "", None
 
-        embed = (f"<iframe src='{web_url_for(game, arm)}' width='100%' height='360' "
-                 f"style='border:1px solid #cbd5e1;border-radius:8px;background:#fff'></iframe>")
+        frame_html = embed(game, arm)
 
         if not res.defect:
             verdict = ("## 本局结论：**未开火** ✅\n\n"
                        + ("这是**干净臂**，沉默是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
                           else "这一局没找到缺陷 —— 换种子或换策略再试。"))
-            return embed, verdict, _state_table(res.pack["initial_state"]["snapshot"] if res.pack else {}), \
+            return frame_html, verdict, _state_table(res.pack["initial_state"]["snapshot"] if res.pack else {}), \
                 f"步数 {res.steps} · 见到状态 {res.distinct_states} · 探测 {res.probes} 次 · {res.wall_ms} ms", None
 
         d = res.defect
@@ -122,7 +148,7 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
 
         WORK.mkdir(parents=True, exist_ok=True)
         path = save_pack(res.pack, WORK / f"{game}-{int(seed)}-{pack_id(res.pack)}.json")
-        return embed, verdict, _state_table(d.get("detail", {}).get("state", {})), stream, str(path)
+        return frame_html, verdict, _state_table(d.get("detail", {}).get("state", {})), stream, str(path)
     finally:
         _BROWSER_SLOT.release()
 

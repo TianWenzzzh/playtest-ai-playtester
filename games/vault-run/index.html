@@ -35,11 +35,18 @@
  */
 (function () {
   "use strict";
-  var plant = "sealed";
-  try {
-    var q = new URLSearchParams(location.search);
-    if (q.get("plant")) plant = q.get("plant");
-  } catch (_) {}
+  function armParam(name, dflt) {
+    try {
+      var injected = window.__GSPP_ARM__;
+      if (injected && injected[name] !== undefined && injected[name] !== null) return String(injected[name]);
+    } catch (_) {}
+    try {
+      var v = new URLSearchParams(location.search).get(name);
+      if (v !== null && v !== "") return v;
+    } catch (_) {}
+    return dflt;
+  }
+  var plant = armParam("plant", "sealed");
 
   // 每层三扇门：第 0 项语义上正确，后两项是干扰。线索都是可读的中文描述。
   var FLOORS = [

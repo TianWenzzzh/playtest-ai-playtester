@@ -51,10 +51,18 @@
 
   // ?maxgap=3 时间隙永不超过可跳距离 ⇒ 该关必定可通关。
   // 基准集用它做正对照：工具在这个变体上必须保持沉默，否则"召回率"没有意义。
-  try {
-    var q = new URLSearchParams(location.search);
-    if (q.get("maxgap")) G.maxGap = Math.max(1, parseInt(q.get("maxgap"), 10) || 6);
-  } catch (_) {}
+  function armParam(name, dflt) {
+    try {
+      var injected = window.__GSPP_ARM__;
+      if (injected && injected[name] !== undefined && injected[name] !== null) return String(injected[name]);
+    } catch (_) {}
+    try {
+      var v = new URLSearchParams(location.search).get(name);
+      if (v !== null && v !== "") return v;
+    } catch (_) {}
+    return dflt;
+  }
+  G.maxGap = Math.max(1, parseInt(armParam("maxgap", "6"), 10) || 6);
 
   function generate() {
     G.platforms = [];
