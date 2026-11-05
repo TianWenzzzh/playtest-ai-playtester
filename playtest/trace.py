@@ -30,6 +30,9 @@ class TraceRecorder:
             "snapshot": self.start.data,
             "clock": self.start.clock,
             "rng": self.start.rng,
+            # 持久状态单独存一份：真实应用的进度落在 localStorage 里，种子覆盖不到它。
+            # 复现包不自带这份，拿到别人机器上就装不回同一个界面。
+            "persistent": env.persistent_state(),
         }
         self._prev_hash = self.start.hash
         self._frames_matched_during_record = 0
@@ -75,7 +78,14 @@ def replay(env: BrowserEnv, pack: dict[str, Any]) -> dict[str, Any]:
     否则"关掉重开也能复现"这句话没有被真正测过。
     """
     seed = pack["initial_state"]["seed"]
-    env.reset(seed)
+    # 先干净起，再把复现包里带的持久状态装回去
+    env.reset(seed, fresh_storage=True)
+    persistent = pack["initial_state"].get("persistent")
+    restored = False
+    if persistent:
+        env.load_persistent_state(persistent)
+        env._advance(env._settle())
+        restored = True
     # 初始状态必须在动手之前取。放在循环之后读，读到的是终局，
     # 于是"初始状态一致"这条永远为假 —— 仪器自己把可复现的东西判成不可复现。
     initial_ok = env.read().hash == pack["initial_state"]["hash"]
@@ -97,13 +107,43 @@ def replay(env: BrowserEnv, pack: dict[str, Any]) -> dict[str, Any]:
             break
 
     total = len(expected)
+    replayed = bool(initial_ok and mismatch is None and matched == total)
     return {
-        "replayed": bool(initial_ok and mismatch is None and matched == total),
+        "replayed": replayed,
         "initial_hash_matched": initial_ok,
         "steps_matched": matched,
         "steps_total": total,
         "hashes_match": mismatch is None,
         "mismatch": mismatch,
+        "determinism_class": _classify(env, replayed, initial_ok, persistent),
+    }
+
+
+def _classify(env: BrowserEnv, replayed: bool, initial_ok: bool, persistent: Any) -> dict[str, Any]:
+    """给这份证据定级。
+
+    🔴 复现失败有几种完全不同的成因，混成一个 false 会误导使用者：
+      · 持久状态没装回去 —— 补上 persistent 就能复现；
+      · 应用有异步依赖（promise / React 调度器 / 网络响应顺序），
+        VirtualClock 管住了 rAF 与定时器，但管不住这些 ⇒ 位级复现在原理上就不成立。
+    后者不是包坏了，是证据强度本来就低一档 —— 它仍然证明"这个缺陷存在过"，
+    只是不能保证"逐帧重放必然再现"。必须自己说清楚，别等别人去发现。
+    """
+    if replayed:
+        return {"level": "bit_reproducible",
+                "claim": "同一 (初始状态, 种子, 动作序列) 在新实例里逐帧哈希全等"}
+    if not initial_ok:
+        return {"level": "unverified",
+                "claim": "连初始状态都对不上 —— 这份包不能作为证据使用，先查探针注入与 frame 解析"}
+    storage_present = bool(persistent and (persistent.get("localStorage") or persistent.get("sessionStorage")))
+    return {
+        "level": "async_dependent",
+        "claim": "缺陷存在过（初始状态一致、前缀可重放），但远端应用的异步时序不受虚拟时钟控制，"
+                 "因此不保证位级再现",
+        "storage_captured": storage_present,
+        "not_caused_by": "持久状态 —— 实测两个全新空 localStorage 实例同样在此处分歧",
+        "mitigation": "要拿到 bit_reproducible，需要游戏侧注册 GSPP adapter 并提供 snapshot/restore，"
+                      "或把页面与资源取到本地离线跑",
     }
 
 

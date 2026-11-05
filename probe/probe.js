@@ -335,6 +335,58 @@
 
     clock: function () { return window.__GSPP_CLOCK__ ? window.__GSPP_CLOCK__.state() : null; },
     rng: function () { return window.__GSPP_RANDOM__ ? window.__GSPP_RANDOM__.state() : null; },
+
+    // 🔴 持久状态。种子的前提是"状态只由 (seed, 动作) 决定"，
+    // 但真实应用普遍把进度写进 localStorage / sessionStorage / cookie：
+    // 第一遍试玩点了"开始新游戏"就落了档，重放时界面已经不一样了，
+    // 于是复现包在真实作品上必然回放不过 —— 实测在牛马地下城上就是这么分歧的。
+    // 所以复现包必须自带这份持久状态，回放前先装回去。
+    storage: function () {
+      var out = { localStorage: {}, sessionStorage: {}, cookie_present: false, oversized: [] };
+      function dump(store, bucket) {
+        try {
+          for (var i = 0; i < store.length; i++) {
+            var k = store.key(i);
+            if (k === null) continue;
+            var v = store.getItem(k);
+            if (v && v.length > 4096) {
+              out.oversized.push(k + ":" + v.length);
+              bucket[k] = "<too_large:" + v.length + ">";
+            } else {
+              bucket[k] = v;
+            }
+          }
+        } catch (e) {
+          out.error = String(e && e.message || e);
+        }
+      }
+      dump(window.localStorage, out.localStorage);
+      dump(window.sessionStorage, out.sessionStorage);
+      try { out.cookie_present = !!document.cookie; } catch (_) {}
+      return out;
+    },
+
+    wipeStorage: function () {
+      try { window.localStorage.clear(); } catch (_) {}
+      try { window.sessionStorage.clear(); } catch (_) {}
+    },
+
+    loadStorage: function (st) {
+      if (!st) return false;
+      try {
+        if (st.localStorage) {
+          window.localStorage.clear();
+          for (var k in st.localStorage) {
+            var v = st.localStorage[k];
+            if (typeof v === "string" && v.indexOf("<too_large:") !== 0) window.localStorage.setItem(k, v);
+          }
+        }
+        if (st.sessionStorage) {
+          for (var k2 in st.sessionStorage) window.sessionStorage.setItem(k2, st.sessionStorage[k2]);
+        }
+        return true;
+      } catch (e) { return false; }
+    },
     errors: function () {
       var e = window.__GSPP_ERRORS__ || [];
       var out = [];

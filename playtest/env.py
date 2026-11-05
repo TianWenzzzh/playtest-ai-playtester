@@ -93,6 +93,16 @@ class Snapshot:
 
 _shared: dict[str, Any] = {"pw": None, "browser": None, "headless": None}
 
+# 埋点/广告/统计域名。它们的请求失败是网络环境的正常结果，不是游戏缺陷。
+_TRACKER_HOSTS = ("mmstat.com", "gm.mmstat", "google-analytics", "googletagmanager",
+                  "doubleclick", "cnzz.com", "umeng.com", "sentry.io", "fbevents",
+                  "clarity.ms", "baidu.com/hm", "gtag")
+
+
+def _is_tracker(url: str) -> bool:
+    low = (url or "").lower()
+    return any(h in low for h in _TRACKER_HOSTS)
+
 
 def shared_browser(headless: bool = True):
     """一个进程只起一个浏览器。
@@ -156,8 +166,10 @@ class BrowserEnv:
         self._browser = None
         self._context = None
         self.page = None
+        self.frame = None
         self.mode = "unstarted"
         self.page_exceptions: list[str] = []
+        self.asset_errors: list[str] = []
         self.started_at = 0.0
 
     def __enter__(self) -> "BrowserEnv":
@@ -178,26 +190,119 @@ class BrowserEnv:
 
         self.page = self._context.new_page()
         self.page.on("pageerror", lambda exc: self.page_exceptions.append(str(exc)))
-        self.page.on("requestfailed", lambda req: self.page_exceptions.append("requestfailed:" + req.url))
+        # 🔴 第三方埋点/广告域名被拦是常态，不是游戏崩溃。
+        # 实测在真实作品上，一个 gm.mmstat.com 的 tracking 请求失败
+        # 就被判成了 crash 并产出了复现包 —— 那是纯误报。
+        # 所以这里只收主源（与页面同源）的失败，其余单独归到 asset_errors。
+        self.page.on("requestfailed", self._on_request_failed)
+        self.page.on("response", self._on_response)
 
         self.page.goto(self.game_url, wait_until="load")
+        self.frame = self._resolve_frame()
         self._js("window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.drain(240)")
         self.started_at = time.time()
 
         meta_mode = self._js("window.__GSPP__ ? window.__GSPP__.mode() : 'absent'")
         if meta_mode == "absent":
             raise RuntimeError(
-                "probe 未注入：目标页没有 window.__GSPP__。"
-                "常见原因是游戏在 iframe 里 —— 需要把 env 指向内层 frame 的 URL。"
+                "probe 未注入：目标 frame 没有 window.__GSPP__。"
+                "常见原因是应用还在更深层 iframe 里，或该 frame 跨域不可注入。"
             )
         self.mode = meta_mode
-        return self.read()
+        snap = self.read()
+        # 🔴 静默失明是本工具最危险的失败模式：外层壳页面也是合法 DOM，
+        # 探针会读到"33 个节点、零按钮、零文本"，然后如实报告"没有缺陷"。
+        # 那不是"游戏没问题"，是"我们没在看游戏"。必须当场判成不可用。
+        if self.is_blind(snap):
+            raise RuntimeError(
+                f"探针失明：目标 frame 里既没有可交互控件也没有可读文本"
+                f"（frame={self.frame.url[:80] if self.frame else None}，"
+                f"节点={self._js('document.querySelectorAll(\"body *\").length')}）。"
+                f" 这通常意味着真正的应用在另一层 iframe 里，或页面尚未完成异步渲染。"
+                f" 宁可拒绝测，也不要报一个'没有缺陷'。"
+            )
+        return snap
 
-    def reset(self, seed: int) -> Snapshot:
+    def _on_request_failed(self, req) -> None:
+        try:
+            if _is_tracker(req.url):
+                self.asset_errors.append("tracker_blocked:" + req.url[:120])
+                return
+            if not req.url.startswith(self.game_url.split("#")[0].rsplit("/", 1)[0]):
+                self.asset_errors.append("cross_origin:" + req.url[:120])
+                return
+            self.page_exceptions.append("requestfailed:" + req.url[:160])
+        except Exception:
+            pass
+
+    def _on_response(self, resp) -> None:
+        try:
+            if resp.status >= 500 and not _is_tracker(resp.url):
+                self.page_exceptions.append(f"http500:{resp.status}:{resp.url[:120]}")
+        except Exception:
+            pass
+
+    def _resolve_frame(self):
+        """挑出真正承载应用的那个 frame。
+
+        魔搭创空间、以及任何"平台外壳 + iframe 内嵌应用"的形态，
+        顶层页面只有一个壳：33 个节点、零按钮、零文本。
+        不解析 frame 就等于对着壳做体检然后宣布健康。
+        """
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=12000)
+        except PlaywrightError:
+            pass
+        best = None
+        best_score = -1
+        for fr in self.page.frames:
+            try:
+                probe = fr.evaluate(
+                    "(function(){var q=function(s){return document.querySelectorAll(s).length};"
+                    "return {has:!!window.__GSPP__, nodes:q('body *'), btns:q("
+                    "'button,[role=button],a[href],input,select,canvas,[onclick],[tabindex]'),"
+                    " texts:q('body *'), title:document.title||''};})()"
+                )
+            except PlaywrightError:
+                continue
+            if not probe or not probe.get("has"):
+                continue
+            score = int(probe.get("btns") or 0) * 10 + int(probe.get("nodes") or 0)
+            if score > best_score:
+                best_score = score
+                best = fr
+        return best or self.page.main_frame
+
+    def is_blind(self, snap: Snapshot) -> bool:
+        # 🔴 判模式要看 self.mode，不能去 data 里找 "mode" 字段 ——
+        # 注册模式下 data 是作者自己的状态字典，根本没有 mode 键。
+        # 第一版在这里写 data.get("mode")=="registered"，结果把 blocky-jump
+        # 这类注册夹具全判成"失明"并拒绝测试：护栏自己咬了自己一口。
+        if self.mode == "registered":
+            return False
+        data = snap.data if isinstance(snap.data, dict) else {}
+        return (not data.get("buttons") and not data.get("texts")
+                and not data.get("canvas") and not data.get("inputs"))
+
+    def reset(self, seed: int, fresh_storage: bool = True) -> Snapshot:
         self.page_exceptions = []
+        # 🔴 真实应用的进度普遍落在 localStorage 里，而种子管不到它。
+        # 不先擦干净，"同一 seed 得到同一初始状态"这句话在真实作品上就是假的
+        # —— 实测在牛马地下城上，第一遍写了存档，重放时界面已经不同。
+        # 注意：这擦的是我们自己这个临时浏览器上下文里的副本，碰不到作者的服务器。
+        if fresh_storage:
+            self._js("window.__GSPP__ && window.__GSPP__.wipeStorage()")
         self._js(f"window.__GSPP__.begin({int(seed)})")
         self._advance(self._settle())
         return self.read()
+
+    def persistent_state(self) -> Any:
+        return self._js("window.__GSPP__ ? window.__GSPP__.storage() : null")
+
+    def load_persistent_state(self, state: Any) -> bool:
+        if state is None:
+            return False
+        return bool(self._js(f"window.__GSPP__.loadStorage({json.dumps(state)})"))
 
     def actions(self) -> list[str]:
         raw = self._js("window.__GSPP__.actions()") or []
@@ -256,6 +361,7 @@ class BrowserEnv:
                 pass
             setattr(self, attr, None)
         self._browser = None
+        self.frame = None
 
     def _settle(self) -> int:
         if self._ticks_per_action is not None:
@@ -267,7 +373,10 @@ class BrowserEnv:
         self._js(f"window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance({int(frames)})")
 
     def _js(self, expr: str) -> Any:
+        # 🔴 必须打在 frame 上而不是 page 上：创空间这类页面顶层只是壳，
+        # 探针和真实 DOM 都在内层 frame。打在 page 上会读到壳的 33 个空节点。
+        target = self.frame if self.frame is not None else self.page
         try:
-            return self.page.evaluate(expr)
+            return target.evaluate(expr)
         except PlaywrightError as exc:
             raise RuntimeError(f"evaluate 失败: {exc} (expr={expr[:80]})") from exc
