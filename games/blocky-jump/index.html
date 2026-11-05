@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方块跳 Blocky Jump</title>
+<style>
+  body{margin:0;background:#101018;color:#e8e8f0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  #hud{display:flex;gap:18px;padding:8px 14px;background:#181826;border-bottom:1px solid #2a2a3e}
+  #hud b{color:#9be08c}
+  canvas{display:block;margin:12px auto;background:#161624;border:1px solid #2a2a3e}
+  #msg{text-align:center;min-height:22px;color:#ffb86b}
+</style>
+</head>
+<body>
+<div id="hud">
+  <span>关卡 <b id="h-idx">0</b>/<span id="h-total">0</span></span>
+  <span>得分 <b id="h-score">0</b></span>
+  <span>生命 <b id="h-hp">3</b></span>
+  <span>可跳距离 <b id="h-reach">3</b></span>
+</div>
+<canvas id="c" width="900" height="260"></canvas>
+<div id="msg"></div>
+<script>
+/*
+ * 方块跳 —— GSPP 基准用的样例游戏之一
+ *
+ * 故意保留一个真实形状的设计缺陷：平台间隙由 Math.random() 生成，
+ * 上界是 6，而角色最大跳跃距离是 3。间隙落在 4..6 时该关无法通过，
+ * 而游戏里没有任何动作能改变间隙 —— 这就是一个典型的 softlock（软锁）。
+ *
+ * 它同时演示了协议接入的真实成本：下面 register({...}) 那一段，18 行。
+ */
+(function () {
+  "use strict";
+
+  var canvas = document.getElementById("c");
+  var ctx = canvas.getContext("2d");
+
+  var G = {
+    platforms: [],
+    idx: 0,
+    hp: 3,
+    score: 0,
+    reach: 3,
+    maxGap: 6,
+    cooldown: 0,
+    won: false,
+    dead: false,
+    message: ""
+  };
+
+  // ?maxgap=3 时间隙永不超过可跳距离 ⇒ 该关必定可通关。
+  // 基准集用它做正对照：工具在这个变体上必须保持沉默，否则"召回率"没有意义。
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get("maxgap")) G.maxGap = Math.max(1, parseInt(q.get("maxgap"), 10) || 6);
+  } catch (_) {}
+
+  function generate() {
+    G.platforms = [];
+    var x = 0;
+    for (var i = 0; i < 12; i++) {
+      var w = 40 + Math.floor(Math.random() * 60);
+      var gap = i === 0 ? 0 : 1 + Math.floor(Math.random() * G.maxGap);
+      x += gap;
+      G.platforms.push({ x: x, w: w, gap: gap });
+      x += w;
+    }
+  }
+
+  function resetGame() {
+    G.idx = 0; G.hp = 3; G.score = 0; G.cooldown = 0;
+    G.won = false; G.dead = false; G.message = "";
+    generate();
+  }
+
+  // 主循环吃 rAF —— 这正是 VirtualClock 要接管的东西
+  var frame = 0;
+  function loop() {
+    frame++;
+    if (G.cooldown > 0) G.cooldown--;
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var camX = Math.max(0, (G.platforms[G.idx] ? G.platforms[G.idx].x : 0) - 120);
+    ctx.fillStyle = "#2f3050";
+    for (var i = 0; i < G.platforms.length; i++) {
+      var p = G.platforms[i];
+      ctx.fillRect(p.x - camX, 190, p.w, 30);
+    }
+    ctx.fillStyle = "#9be08c";
+    var cur = G.platforms[G.idx];
+    if (cur) ctx.fillRect(cur.x - camX + cur.w / 2 - 10, 160, 20, 30);
+    document.getElementById("h-idx").textContent = String(G.idx);
+    document.getElementById("h-total").textContent = String(G.platforms.length - 1);
+    document.getElementById("h-score").textContent = String(G.score);
+    document.getElementById("h-hp").textContent = String(G.hp);
+    document.getElementById("h-reach").textContent = String(G.reach);
+    document.getElementById("msg").textContent = G.message;
+  }
+
+  function tryJump() {
+    if (G.dead || G.won || G.cooldown > 0) return;
+    var next = G.platforms[G.idx + 1];
+    if (!next) return;
+    if (next.gap <= G.reach) {
+      G.idx++;
+      G.score += 10 + next.gap;
+      G.cooldown = 4;
+      G.message = "跳到关卡 " + G.idx;
+      if (G.idx === G.platforms.length - 1) { G.won = true; G.message = "通关"; }
+    } else {
+      G.hp--;
+      G.cooldown = 8;
+      G.message = "间隙 " + next.gap + " 超过可跳距离 " + G.reach + "，跌落";
+      if (G.hp <= 0) { G.dead = true; G.message = "生命耗尽"; }
+    }
+  }
+
+  window.addEventListener("keydown", function (e) {
+    if (e.code === "ArrowRight" || e.code === "Space") tryJump();
+  });
+
+  // ===== GSPP 探针接入（这就是"20 行"的那 20 行）=====
+  window.__GSPP__.register({
+    meta: { id: "blocky-jump", title: "方块跳", ticksPerAction: 6 },
+    // 探针 begin(seed) 时先播好种子再调这里，所以 generate() 吃的是可控随机
+    reset: function () { resetGame(); },
+    read: function () {
+      return {
+        level: G.idx,
+        total: G.platforms.length - 1,
+        score: G.score,
+        hp: G.hp,
+        reach: G.reach,
+        maxGap: G.maxGap,
+        nextGap: G.platforms[G.idx + 1] ? G.platforms[G.idx + 1].gap : null,
+        cooldown: G.cooldown,
+        won: G.won,
+        dead: G.dead
+      };
+    },
+    actions: function () {
+      return [
+        { name: "jump", label: "向前跳" },
+        { name: "wait", label: "原地等一帧" }
+      ];
+    },
+    apply: function (a) {
+      if (a.name === "jump") tryJump();
+    },
+    isOver: function (s) { return s.won || s.dead; },
+    isWin: function (s) { return !!s.won; },
+    // score 与 cooldown 会一直变，但不改变"局面"。不声明投影的话，
+    // 可达性探测会因为状态永不重复而截断 —— 见 protocol/GSPP.md 的 key()。
+    key: function (s) { return { level: s.level, hp: s.hp, won: s.won, dead: s.dead }; },
+    invariants: function (s) {
+      var bad = [];
+      if (s.hp < 0 || s.hp > 3) bad.push("hp 越界: " + s.hp);
+      if (s.score < 0) bad.push("score 为负: " + s.score);
+      if (s.level < 0 || s.level > s.total) bad.push("level 越界: " + s.level + "/" + s.total);
+      return bad;
+    },
+    snapshot: function () {
+      return { platforms: G.platforms, idx: G.idx, hp: G.hp, score: G.score, cooldown: G.cooldown, won: G.won, dead: G.dead };
+    },
+    restore: function (st) {
+      G.platforms = st.platforms; G.idx = st.idx; G.hp = st.hp;
+      G.score = st.score; G.cooldown = st.cooldown; G.won = st.won; G.dead = st.dead;
+    }
+  });
+
+  resetGame();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>密室出口 Maze Exit</title>
+<style>
+  body{margin:0;background:#0f1420;color:#dfe6f5;font:14px/1.5 system-ui,sans-serif;padding:14px}
+  canvas{background:#151d2e;border:1px solid #2b3a5c;border-radius:6px}
+  #st{margin-top:8px}
+</style>
+</head>
+<body>
+<h3>密室出口</h3>
+<canvas id="c" width="320" height="256"></canvas>
+<div id="st">—</div>
+<script>
+/*
+ * 真软锁夹具。
+ *
+ * 与 blocky-jump 的区别很关键：那个是「能死，但赢不了」(unwinnable)，
+ * 这个是「既赢不了也死不掉」(softlock) —— 游戏没有失败结局，
+ * 钥匙在完全孤立的格子里拿不到，出口门永远开着但进不去，
+ * 玩家可以在里面走一辈子。屏幕上没有任何异常，游戏也从不报错，
+ * 人试玩时最难发现的就是这一类。
+ *
+ * 迷宫构造（5×4，(0,y) 整列为墙）：
+ *   墙 = 第0列 ∪ {(2,1),(3,1),(2,2),(4,2),(3,3)}
+ *   可达区 A = {(1,0),(2,0),(3,0),(4,0),(1,1),(1,2),(1,3),(2,3)}
+ *   起点 (1,0) ∈ A，出口 (4,0) ∈ A，钥匙默认 (4,3) ∉ A 且四邻皆墙 ⇒ 完全孤立
+ *
+ * ?plant=none 时钥匙挪到 (2,0) ∈ A ⇒ 必定能赢，用作正对照。
+ */
+(function () {
+  "use strict";
+  var W = 5, H = 4, CELL = 64;
+  var plant = "keywall";
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get("plant")) plant = q.get("plant");
+  } catch (_) {}
+
+  var WALLS = {};
+  function k(x, y) { return x + "," + y; }
+  for (var yy = 0; yy < H; yy++) WALLS[k(0, yy)] = 1;
+  [[2, 1], [3, 1], [2, 2], [4, 2], [3, 3]].forEach(function (p) { WALLS[k(p[0], p[1])] = 1; });
+
+  var START = { x: 1, y: 0 };
+  var KEY = plant === "none" ? { x: 2, y: 0 } : { x: 4, y: 3 };
+  var EXIT = { x: 4, y: 0 };
+
+  var S = { x: START.x, y: START.y, hasKey: false, moves: 0, won: false };
+
+  function blocked(x, y) {
+    if (x < 0 || y < 0 || x >= W || y >= H) return true;
+    return !!WALLS[k(x, y)];
+  }
+
+  function move(dx, dy) {
+    if (S.won) return;
+    var nx = S.x + dx, ny = S.y + dy;
+    if (blocked(nx, ny)) return;
+    S.x = nx; S.y = ny; S.moves++;
+    if (nx === KEY.x && ny === KEY.y) S.hasKey = true;
+    if (nx === EXIT.x && ny === EXIT.y && S.hasKey) S.won = true;
+  }
+
+  function render() {
+    var c = document.getElementById("c"), g = c.getContext("2d");
+    g.fillStyle = "#151d2e"; g.fillRect(0, 0, c.width, c.height);
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      if (WALLS[k(x, y)]) { g.fillStyle = "#2b3a5c"; g.fillRect(x * CELL, y * CELL, CELL - 2, CELL - 2); }
+    }
+    g.fillStyle = "#4ade80"; g.fillRect(EXIT.x * CELL + 6, EXIT.y * CELL + 6, CELL - 14, CELL - 14);
+    g.fillStyle = "#ffd166"; g.fillRect(KEY.x * CELL + 22, KEY.y * CELL + 22, 20, 20);
+    g.fillStyle = "#f87171"; g.fillRect(S.x * CELL + 24, S.y * CELL + 24, 16, 16);
+    document.getElementById("st").textContent =
+      "位置 " + S.x + "," + S.y + " ｜ 钥匙 " + (S.hasKey ? "有" : "无") + " ｜ 步数 " + S.moves +
+      (S.won ? " ｜ 逃出" : "");
+  }
+
+  function loop() { render(); requestAnimationFrame(loop); }
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") move(-1, 0);
+    if (e.key === "ArrowRight") move(1, 0);
+    if (e.key === "ArrowUp") move(0, -1);
+    if (e.key === "ArrowDown") move(0, 1);
+  });
+
+  window.__GSPP__.register({
+    meta: { id: "maze-exit", title: "密室出口", ticksPerAction: 2, plant: plant },
+    reset: function () { S.x = START.x; S.y = START.y; S.hasKey = false; S.moves = 0; S.won = false; },
+    read: function () {
+      return { x: S.x, y: S.y, hasKey: S.hasKey, moves: S.moves, won: S.won, plant: plant };
+    },
+    actions: function () {
+      return [{ name: "left" }, { name: "right" }, { name: "up" }, { name: "down" }];
+    },
+    apply: function (a) {
+      if (a.name === "left") move(-1, 0);
+      if (a.name === "right") move(1, 0);
+      if (a.name === "up") move(0, -1);
+      if (a.name === "down") move(0, 1);
+    },
+    isOver: function (s) { return !!s.won; },
+    isWin: function (s) { return !!s.won; },
+    // moves 是单调计数器，不参与"局面是否相同"的判定。
+    // 不声明这个投影，可达性探测会因为状态永不重复而永远截断。
+    key: function (s) { return { x: s.x, y: s.y, hasKey: s.hasKey }; },
+    invariants: function (s) {
+      var bad = [];
+      if (s.x < 0 || s.x >= W || s.y < 0 || s.y >= H) bad.push("玩家位置越界");
+      if (!!WALLS[k(s.x, s.y)]) bad.push("玩家嵌在墙里: " + s.x + "," + s.y);
+      return bad;
+    },
+    snapshot: function () { return JSON.parse(JSON.stringify(S)); },
+    restore: function (st) { S.x = st.x; S.y = st.y; S.hasKey = st.hasKey; S.moves = st.moves; S.won = st.won; }
+  });
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+gradio>=4.44
+playwright>=1.40

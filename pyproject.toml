@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playtest-agent"
+version = "0.1.0"
+description = "AI 试玩员：任意 HTML5 游戏的自动试玩、确定性缺陷复现与修复闭环"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "TianWen" }]
+dependencies = [
+  "playwright>=1.40",
+]
+
+[project.optional-dependencies]
+ui = ["gradio>=4.0"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+playtest = "playtest.cli:main"
+
+[tool.setuptools]
+packages = ["playtest"]
+
+[tool.setuptools.package-data]
+playtest = ["../probe/*.js"]

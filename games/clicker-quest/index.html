@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>点击冒险 Clicker Quest</title>
+<style>
+  body{margin:0;font:16px/1.6 system-ui,sans-serif;background:#f6f4ee;color:#22202b;padding:20px}
+  button{font:inherit;padding:8px 14px;margin:4px 6px 4px 0;border:1px solid #b9b3a4;background:#fff;border-radius:6px;cursor:pointer}
+  #log{margin-top:14px;padding:10px;background:#fff;border:1px dashed #b9b3a4;min-height:80px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<h2>点击冒险</h2>
+<p>金币：<span id="gold">0</span> ｜ 房间：<span id="room">起点</span></p>
+<div id="controls">
+  <button id="b-mine">挖矿</button>
+  <button id="b-shop">去商店</button>
+  <button id="b-door">神秘门</button>
+</div>
+<div id="shop" class="hidden">
+  <p>商店老板：买把钥匙要 50 金币。</p>
+  <button id="b-buy">买钥匙</button>
+  <button id="b-back">回去</button>
+</div>
+<div id="log"></div>
+<script>
+/*
+ * 这个文件里**没有任何 GSPP 相关代码** —— 它代表本届绝大多数参赛作品的真实样子：
+ * 作者写完就部署了，没打算为测试工具改造自己。
+ *
+ * 它带一个很常见的真实缺陷：「神秘门」按钮可见、可点、有样式反馈，
+ * 但没有任何 handler 接它。玩家点了会以为"还没到剧情"，其实永远进不去。
+ * 这类 UI 死路靠人肉试玩很容易漏，靠 DOM 兜底探针是确定性可发现的。
+ */
+(function () {
+  "use strict";
+  var gold = 0, hasKey = false;
+  var logEl = document.getElementById("log");
+
+  function log(s) { logEl.textContent = s; }
+
+  document.getElementById("b-mine").addEventListener("click", function () {
+    gold += 7 + Math.floor(Math.random() * 4);
+    document.getElementById("gold").textContent = String(gold);
+    log("你挖到了金币，现在有 " + gold + "。");
+  });
+
+  document.getElementById("b-shop").addEventListener("click", function () {
+    document.getElementById("controls").classList.add("hidden");
+    document.getElementById("shop").classList.remove("hidden");
+    document.getElementById("room").textContent = "商店";
+    log("商店里有一股铁锈味。");
+  });
+
+  document.getElementById("b-back").addEventListener("click", function () {
+    document.getElementById("shop").classList.add("hidden");
+    document.getElementById("controls").classList.remove("hidden");
+    document.getElementById("room").textContent = "起点";
+    log("你回到起点。");
+  });
+
+  document.getElementById("b-buy").addEventListener("click", function () {
+    if (gold < 50) { log("老板摇头：金币不够。"); return; }
+    gold -= 50; hasKey = true;
+    document.getElementById("gold").textContent = String(gold);
+    log("你买到了黄铜钥匙。");
+  });
+
+  // 🔴 缺陷本体：「神秘门」被接了样式和文案，但从未被接上逻辑。
+  // 作者本来打算"下一版再做"，然后忘了。
+  // ?plant=none 时把它接上 —— 这一臂用来证明工具不是"见到按钮就报死路"。
+  var door = document.getElementById("b-door");
+  door.addEventListener("mouseenter", function () { door.style.borderColor = "#7a6cff"; });
+
+  var qs = {};
+  try { qs = Object.fromEntries(new URLSearchParams(location.search).entries()); } catch (_) {}
+  if (qs.plant === "none") {
+    door.addEventListener("click", function () {
+      log("门开了，里面是宝藏。");
+      document.getElementById("room").textContent = "宝藏间";
+    });
+  }
+})();
+</script>
+</body>
+</html>
