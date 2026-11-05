@@ -18,6 +18,11 @@ python -m playtest.cli scan games/clicker-quest --seeds 20261105 --policy curios
 
 # 校验某个复现包是否真的可复现（退出码 0=可复现，1=不可）—— 可以直接进 CI
 python -m playtest.cli replay out/scan/curiosity-20261105-<id>.json
+
+# 线上的游戏：先取包，之后所有读数都从磁盘回答（零联网，异步时序这个非确定源被摘掉）
+python -m playtest.cli capture https://someone.ms.show/ --har someone.har --warm-clicks
+python -m playtest.cli capture https://someone.ms.show/ --har someone.har --top-up  # 补包：撑开深层覆盖面
+python -m playtest.cli scan https://someone.ms.show/ --har someone.har
 ```
 
 跑通第一条命令的典型耗时：**< 15 秒**（本地文件、无模型调用）。
@@ -186,7 +191,17 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
    工具会明确报出来，不会假装复现成功。
 3. WebGL canvas 的像素指纹跨 GPU 未必逐位一致 ⇒ 兜底模式跨机复现强度弱于注册模式。
 4. 可达性探测受 `horizon` 限制，状态空间大的游戏会截断。
-5. iframe 内游戏需把 URL 指向内层 frame；跨域 iframe 不支持。
+5. **iframe 里的游戏可以测，但复现包要带对的那份持久状态**。
+   实测过"平台壳 + 跨源 iframe"的形态：init script 逐 frame 生效，跨源也能读；
+   真正难的是壳会把应用入口 302 回自己的页面，且 iframe URL 每次带一个新时间戳 ——
+   这两条由 `env._resolve_frame()` 与离线镜像的三档命中处理（见
+   [`docs/offline-capture.md`](docs/offline-capture.md)）。
+6. **服务端依赖是复现等级的硬上限**。带推理接口的应用（POST 一发就花钱那种）
+   离线兜不住，工具把它显式记成未命中并降格，而不是假装跑通。
+7. **离线摘掉网络，摘不掉解码**。图片解码完成时刻不在虚拟时钟的帧栅格上，
+   所以"进入新场景"那一步仍可能跨跑分歧——实测在第 18 步分裂，如实报 `async_dependent`
+   并报出分歧位置。把哈希时机从"动作后固定帧数"改成"静息判据"是下一步，
+   它会影响所有既有复现包的含义，所以连同基准一起重跑才动。
 
 ---
 
@@ -223,12 +238,14 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
 ```
 probe/            三个注入垫片（浏览器侧，纯 JS，无依赖）
 protocol/GSPP.md  协议规范与复现包 schema
-playtest/         Python 主体：env / trace / detectors / policies / agent / fixer / cli / llm
+playtest/         Python 主体：env / trace / detectors / policies / agent / fixer / offline / cli / llm
 games/            样例游戏（含植入缺陷与干净臂）
 benchmark/        缺陷植入基准与策略对比
-tests/            m0_smoke（15 项断言）/ m1_fallback（零接入）
+tests/            m0_smoke（确定性内核）/ m1_fallback（零接入）/ m2_fix（修复闭环）
+                  m3_offline（离线取包端到端）/ m3_mirror_semantics（镜像匹配语义，不开浏览器）
+                  real_targets（真实第三方作品）—— 各项断言数以运行输出为准，文档里不抄数
 deploy/dgx-spark/ arm64 SGLang 部署方案与实测
-docs/             接入指南、扩展适配器写法、已知限制
+docs/             接入指南、离线取包、扩展适配器写法、已知限制
 ```
 
 ## 许可

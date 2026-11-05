@@ -17,6 +17,10 @@
   <button id="b-mine">挖矿</button>
   <button id="b-shop">去商店</button>
   <button id="b-door">神秘门</button>
+  <label id="vol-label" for="vol">音量</label>
+  <input id="vol" type="range" min="0" max="100" step="1" value="28" aria-label="音量">
+  <span id="volread">28%</span>
+  <label id="mute-label" for="mute"><input id="mute" type="checkbox" aria-label="静音"> 静音</label>
 </div>
 <div id="shop" class="hidden">
   <p>商店老板：买把钥匙要 50 金币。</p>
@@ -65,6 +69,18 @@
     gold -= 50; hasKey = true;
     document.getElementById("gold").textContent = String(gold);
     log("你买到了黄铜钥匙。");
+  });
+
+  // 两个"正常工作着"的非按钮控件。它们存在的唯一目的是当对照：
+  // 滑杆与勾选框的点击不产生 DOM 事件层面的"激活"，早期实现会把它们判成死路
+  // （实测在真实作品上误报过一次音量滑杆）。工具必须能区分"点了没反应"和"我看不见反应"。
+  var vol = document.getElementById("vol");
+  vol.addEventListener("input", function () {
+    document.getElementById("volread").textContent = vol.value + "%";
+  });
+  var mute = document.getElementById("mute");
+  mute.addEventListener("change", function () {
+    log(mute.checked ? "已静音。" : "声音恢复。");
   });
 
   // 🔴 缺陷本体：「神秘门」被接了样式和文案，但从未被接上逻辑。

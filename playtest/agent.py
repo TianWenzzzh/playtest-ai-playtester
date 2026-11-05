@@ -71,13 +71,15 @@ def diagnose(
     prefix: list[str],
     horizon: int = 12,
     headless: bool = True,
+    offline: Any = None,
+    har_path: str | None = None,
 ) -> dict[str, Any] | None:
     """新开一个实例，重放到 prefix 末端，再做可达性探测。
 
     单独开实例不是为了省事，是因为探测本身要消耗帧数并回滚状态 ——
     留在录制实例里就会污染那条要被复现的轨迹。
     """
-    env = BrowserEnv(game_url, headless=headless)
+    env = BrowserEnv(game_url, headless=headless, offline=offline, har_path=har_path)
     try:
         env.start()
         env.reset(seed)
@@ -101,9 +103,11 @@ def run_episode(
     horizon: int = 12,
     headless: bool = True,
     extra_defect_check: Callable[[Snapshot], dict[str, Any] | None] | None = None,
+    offline: Any = None,
+    har_path: str | None = None,
 ) -> EpisodeResult:
     t0 = time.time()
-    env = BrowserEnv(game_url, headless=headless)
+    env = BrowserEnv(game_url, headless=headless, offline=offline, har_path=har_path)
     recorder: TraceRecorder | None = None
     try:
         env.start()
@@ -149,7 +153,8 @@ def run_episode(
                 probes += 1
                 novel_since_probe = 0
                 stale = 0
-                defect = diagnose(game_url, seed, list(history), horizon=horizon, headless=headless)
+                defect = diagnose(game_url, seed, list(history), horizon=horizon,
+                                  headless=headless, offline=offline)
 
             if defect:
                 defect["found_by_step"] = step_i
@@ -179,7 +184,8 @@ def run_episode(
             result.probes = probes
             prefix = [a["action"] for a in recorder.actions][:-1]
             if prefix:
-                post = diagnose(game_url, seed, prefix, horizon=horizon, headless=headless)
+                post = diagnose(game_url, seed, prefix, horizon=horizon,
+                                headless=headless, offline=offline)
                 if post:
                     post["found_by_step"] = len(prefix)
                     post["detail"] = {**post.get("detail", {}),
@@ -201,9 +207,10 @@ def run_episode(
         env.close()
 
 
-def verify_pack(game_url: str, pack: dict[str, Any], headless: bool = True) -> dict[str, Any]:
+def verify_pack(game_url: str, pack: dict[str, Any], headless: bool = True,
+                offline: Any = None) -> dict[str, Any]:
     """新开一个浏览器实例重放 —— 不复用录制时的进程，否则"关掉重开也能复现"没被真的测。"""
-    env = BrowserEnv(game_url, headless=headless)
+    env = BrowserEnv(game_url, headless=headless, offline=offline)
     try:
         env.start()
         return replay(env, pack)
@@ -218,12 +225,14 @@ def sweep(
     out_dir: Path,
     max_steps: int = 120,
     headless: bool = True,
+    offline: Any = None,
 ) -> dict[str, Any]:
     """一个游戏 × 多个种子扫一遍，落盘所有开火的复现包。"""
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
     for seed in seeds:
-        res = run_episode(game_url, seed, policy_factory(seed), max_steps=max_steps, headless=headless)
+        res = run_episode(game_url, seed, policy_factory(seed), max_steps=max_steps,
+                          headless=headless, offline=offline)
         row: dict[str, Any] = {
             "seed": seed, "policy": res.policy, "steps": res.steps, "frames": res.frames,
             "distinct_states": res.distinct_states, "reached_over": res.reached_over,
@@ -234,7 +243,7 @@ def sweep(
         if res.defect:
             row["defect"] = {"kind": res.defect["kind"], "signature": res.defect["signature"]}
             if res.pack:
-                v = verify_pack(game_url, res.pack, headless=headless)
+                v = verify_pack(game_url, res.pack, headless=headless, offline=offline)
                 res.pack["verification"] = v
                 from .trace import pack_id
 

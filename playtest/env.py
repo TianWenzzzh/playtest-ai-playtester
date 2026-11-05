@@ -155,6 +155,8 @@ class BrowserEnv:
         ticks_per_action: int | None = None,
         viewport: tuple[int, int] = (960, 600),
         browser_executable: str | None = None,
+        har_path: str | None = None,
+        offline: Any = None,
     ) -> None:
         self.game_url = game_url
         self.headless = headless
@@ -162,6 +164,10 @@ class BrowserEnv:
         self._ticks_per_action = ticks_per_action
         self.viewport = viewport
         self.browser_executable = browser_executable
+        # har_path = 录制（联网跑一次，把响应存成包）；offline = 回放（只从磁盘回答，不联网）。
+        # 两者互斥由调用方保证：拿着镜像还去录，录到的就是空包。
+        self.har_path = har_path
+        self.offline = offline
 
         self._browser = None
         self._context = None
@@ -170,6 +176,7 @@ class BrowserEnv:
         self.mode = "unstarted"
         self.page_exceptions: list[str] = []
         self.asset_errors: list[str] = []
+        self.relinks = 0  # 导航把 frame 句柄打碎后重新解析的次数
         self.started_at = 0.0
 
     def __enter__(self) -> "BrowserEnv":
@@ -183,7 +190,15 @@ class BrowserEnv:
         if self.page is not None:
             return self.read()
         self._browser = shared_browser(self.headless)
-        self._context = self._browser.new_context(viewport={"width": self.viewport[0], "height": self.viewport[1]})
+        ctx_kwargs: dict[str, Any] = {"viewport": {"width": self.viewport[0], "height": self.viewport[1]}}
+        if self.har_path:
+            ctx_kwargs["record_har_path"] = str(self.har_path)
+            ctx_kwargs["record_har_content"] = "embed"
+        self._context = self._browser.new_context(**ctx_kwargs)
+        # 镜像挂在 context 而不是 page 上：创空间那种"壳 + iframe"的形态里，
+        # 真正加载资源的往往是子 frame。
+        if self.offline is not None:
+            self.offline.attach(self._context)
 
         for name in INIT_SCRIPTS:
             self._context.add_init_script(path=str(PROBE_DIR / name))
@@ -225,6 +240,11 @@ class BrowserEnv:
 
     def _on_request_failed(self, req) -> None:
         try:
+            # 镜像未命中是**我们的包不全**，不是游戏的缺陷。归到 asset_errors，
+            # 但调用方必须看 mirror.report()：misses 非零时这次确定性等级要降格。
+            if self.offline is not None and self.offline.is_miss(req.url):
+                self.asset_errors.append("mirror_miss:" + req.url[:120])
+                return
             if _is_tracker(req.url):
                 self.asset_errors.append("tracker_blocked:" + req.url[:120])
                 return
@@ -372,11 +392,22 @@ class BrowserEnv:
     def _advance(self, frames: int) -> None:
         self._js(f"window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance({int(frames)})")
 
-    def _js(self, expr: str) -> Any:
+    def _js(self, expr: str, _retry: bool = True) -> Any:
         # 🔴 必须打在 frame 上而不是 page 上：创空间这类页面顶层只是壳，
         # 探针和真实 DOM 都在内层 frame。打在 page 上会读到壳的 33 个空节点。
         target = self.frame if self.frame is not None else self.page
         try:
+            if self.frame is not None and self.frame.is_detached():
+                raise PlaywrightError("Frame was detached (导航后旧句柄作废)")
             return target.evaluate(expr)
         except PlaywrightError as exc:
+            # 真实游戏会"整页跳转"（重新开始、回主菜单、进下一关）。
+            # 跳转把执行上下文换掉，旧 frame 句柄就此失效 —— 实测在牛马地下城上，
+            # 三个种子全部在这里被判成 error，steps=0：那不是游戏的错，是我的句柄没跟上。
+            # 这里重新解析一次 frame 再试，而不是把一局好端端的探索作废。
+            msg = str(exc)
+            if _retry and self.page is not None and ("destroyed" in msg or "detached" in msg):
+                self.relinks += 1
+                self.frame = self._resolve_frame()
+                return self._js(expr, _retry=False)
             raise RuntimeError(f"evaluate 失败: {exc} (expr={expr[:80]})") from exc

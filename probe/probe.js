@@ -129,7 +129,11 @@
     try {
       var ins = document.querySelectorAll("input:not([type=hidden]),select,textarea");
       for (var q = 0; q < ins.length && inputs.length < 20; q++) {
-        inputs.push(((ins[q].id || ins[q].name || labelOf(ins[q])) + "=" + String(ins[q].value || "")).slice(0, 60));
+        var e = ins[q];
+        // value 之外还要带 checked：勾选框的 value 恒为 "on"，
+        // 只读 value 的话"勾上了/取消了"在指纹里是隐形的 —— 同一类盲区。
+        var extra = (e.type === "checkbox" || e.type === "radio") ? ("|" + (e.checked ? "c" : "-")) : "";
+        inputs.push(((e.id || e.name || labelOf(e)) + "=" + String(e.value || "") + extra).slice(0, 60));
       }
     } catch (_) {}
 
@@ -178,6 +182,33 @@
         if (its[q].tag === a.tag && its[q].label === a.label_key) { el = its[q].el; break; }
       }
       if (!el) return false;
+      // 🔴 滑杆与下拉框不能只靠派发的 MouseEvent：非可信事件跑不动浏览器自己实现的
+      // 轨道拖拽/弹层选择（实测在真实作品上，音量滑杆点完值纹丝不动，
+      // 于是被判成"这个控件从来没起过作用"——那是仪器的盲区，不是游戏的缺陷）。
+      // 动作空间里没有坐标，所以这里给"点一下滑杆"一个确定的解释：按 step 前进一格，到头回绕。
+      if (el.tagName === "INPUT" && el.type === "range") {
+        var mn = el.min === "" ? 0 : parseFloat(el.min);
+        var mx = el.max === "" ? 100 : parseFloat(el.max);
+        var st = el.step === "" ? 1 : parseFloat(el.step);
+        if (!isFinite(st) || st <= 0) st = 1;
+        var next = parseFloat(el.value);
+        if (!isFinite(next)) next = mn;
+        next = next + st;
+        if (next > mx) next = mn;
+        // 用原生 setter 绕过 React 的 value tracker，否则受控组件收不到 onChange
+        var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        setter.call(el, String(next));
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+      if (el.tagName === "SELECT" && el.options.length > 0) {
+        var idx = (el.selectedIndex + 1) % el.options.length;
+        el.options[idx].selected = true;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
       var r = el.getBoundingClientRect();
       var x = r.left + r.width / 2, y = r.top + r.height / 2;
       var opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window };
