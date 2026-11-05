@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>塔之回廊 Vault Run</title>
+<style>
+  body{margin:0;background:#12101c;color:#e8e4f5;font:15px/1.6 "Microsoft YaHei",system-ui,sans-serif;padding:16px}
+  #room{background:#1d1830;border:1px solid #3a3060;border-radius:10px;padding:14px 18px;margin-bottom:12px}
+  #room h3{margin:0 0 6px;color:#c9b8ff;font-size:17px}
+  button{font:inherit;padding:9px 14px;margin:5px 8px 0 0;border:1px solid #4a3f78;background:#241f3d;
+         color:#e8e4f5;border-radius:8px;cursor:pointer;text-align:left}
+  button:hover{border-color:#8f7bff}
+  #log{color:#ffb86b;min-height:26px;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="room"><h3 id="title">—</h3><div id="desc">—</div></div>
+<div id="doors"></div>
+<div id="log"></div>
+<script>
+/*
+ * 塔之回廊 —— 给基准表造分辨力用的夹具。
+ *
+ * 前三个夹具的缺陷都"一步可见"，所以五套策略得分一模一样 —— 那张表没有分辨力。
+ * 更根本的原因是：状态空间小的时候，穷举可达性探测本身就是个求解器，
+ * 语义能力没有用武之地。所以这个夹具刻意做成两件事叠加：
+ *
+ *   ① 缺陷在第 17 层，而探测 horizon 默认只有 12 ⇒ 从起点穷举**证不出**它，
+ *      工具必须真的把游戏往下打到第 17 层，才有机会看见它。
+ *   ② 打到第 17 层要求连续 17 次选对门，而"哪扇对"只写在门上的中文线索里。
+ *      随机撞中的概率是 (1/3)^17 ≈ 1e-8，40 步预算内等于不可能。
+ *
+ * ⇒ 于是这张表变成：random / curiosity 必然 0，
+ *   能读线索的策略才能到 17 层并开火。LLM 臂从此有了一个可测的靶子。
+ *
+ * ?plant=none 时第 17 层那扇门正常开 ⇒ 必定可登顶，用作正对照。
+ */
+(function () {
+  "use strict";
+  var plant = "sealed";
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get("plant")) plant = q.get("plant");
+  } catch (_) {}
+
+  // 每层三扇门：第 0 项语义上正确，后两项是干扰。线索都是可读的中文描述。
+  var FLOORS = [
+    ["门缝里有风吹出来", "门缝封得死死的", "里面一点光都没有"],
+    ["壁上有盏还亮着的灯", "摸上去冰凉", "门上有朝外的抓痕"],
+    ["隐约有说话声", "铰链锈成一块", "门槛磨得很浅"],
+    ["烛火往门那边倒", "门板像镜子一样光", "飘来海腥味"],
+    ["门板是温的", "门口拉着白粉线", "门后有铃声"],
+    ["传来流水声", "门轴断了", "墙皮鼓成一片"],
+    ["地上有新鲜的脚印", "门框结了蛛网", "空气发闷"],
+    ["透出一点火光", "摸上去有霉味", "门板厚得发乌"],
+    ["有风从下面上来", "焊死的", "只画了个门框"],
+    ["锁是新的", "钥匙孔里塞着东西", "锁体锈成红块"],
+    ["门后有人走动", "地面积灰没被扫过", "门缝夹着旧报纸"],
+    ["灯绳还挂着", "灯罩碎了一地", "天花板有水渍"],
+    ["台阶朝上延伸", "台阶到这就没了", "台阶塌了一半"],
+    ["铁栏门开着", "铁栏门上了闩", "铁栏门弯了"],
+    ["有钟表在走", "钟停在同一个时刻", "地上是碎玻璃"],
+    ["窗户外是阳台", "窗户被砖封了", "窗户只画在墙上"],
+    ["风铃在响", "风铃的线断了", "风铃是铁的且锈住"],
+    ["门开着，外面是天光", "门被砖封死了", "门后是一堵墙"]
+  ];
+  var TOP = FLOORS.length;
+  var SEAL_FLOOR = TOP - 1;
+
+  var S = { floor: 0, lives: 3, won: false, dead: false, log: "" };
+
+  function choose(i) {
+    if (S.won || S.dead) return;
+    if (i !== 0) {
+      S.lives--;
+      S.log = "打不开。损失一条命。";
+      if (S.lives <= 0) S.dead = true;
+      return;
+    }
+    if (S.floor === SEAL_FLOOR && plant !== "none") {
+      S.log = "这扇是正门，但被砖封死了 —— 塔里没有别的路。";
+      return;
+    }
+    S.floor++;
+    S.log = "上到第 " + (S.floor + 1) + " 层。";
+    if (S.floor >= TOP) { S.won = true; S.log = "登顶。"; }
+  }
+
+  function render() {
+    var names = S.floor < TOP ? FLOORS[S.floor] : [];
+    document.getElementById("title").textContent =
+      S.won ? "登顶" : (S.dead ? "命数耗尽" : "第 " + (S.floor + 1) + " 层 / 共 " + TOP + " 层");
+    document.getElementById("desc").textContent = S.floor < TOP ? "三扇门，选一扇上去。" : "已到顶。";
+    var box = document.getElementById("doors");
+    if (box.childElementCount !== names.length) {
+      box.innerHTML = "";
+      for (var i = 0; i < names.length; i++) {
+        (function (idx) {
+          var b = document.createElement("button");
+          b.id = "door-" + idx;
+          b.textContent = names[idx];
+          b.addEventListener("click", function () { choose(idx); });
+          box.appendChild(b);
+        })(i);
+      }
+    }
+    document.getElementById("log").textContent = S.log;
+  }
+
+  function loop() { render(); requestAnimationFrame(loop); }
+
+  window.__GSPP__.register({
+    meta: { id: "vault-run", title: "塔之回廊", ticksPerAction: 3, plant: plant },
+    reset: function () { S.floor = 0; S.lives = 3; S.won = false; S.dead = false; S.log = ""; },
+    read: function () {
+      return {
+        floor: S.floor, top: TOP, lives: S.lives, won: S.won, dead: S.dead,
+        doors: S.floor < TOP ? FLOORS[S.floor] : [], plant: plant
+      };
+    },
+    actions: function () {
+      if (S.floor >= TOP) return [{ name: "wait" }];
+      var d = FLOORS[S.floor];
+      return [
+        { name: "door0", label: d[0] },
+        { name: "door1", label: d[1] },
+        { name: "door2", label: d[2] }
+      ];
+    },
+    apply: function (a) {
+      if (a.name === "door0") choose(0);
+      if (a.name === "door1") choose(1);
+      if (a.name === "door2") choose(2);
+    },
+    isOver: function (s) { return s.won || s.dead; },
+    isWin: function (s) { return !!s.won; },
+    key: function (s) { return { floor: s.floor, lives: s.lives, won: s.won, dead: s.dead }; },
+    snapshot: function () { return JSON.parse(JSON.stringify(S)); },
+    restore: function (st) { S.floor = st.floor; S.lives = st.lives; S.won = st.won; S.dead = st.dead; S.log = st.log; }
+  });
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

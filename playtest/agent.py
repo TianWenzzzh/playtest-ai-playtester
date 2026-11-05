@@ -15,11 +15,13 @@ from typing import Any, Callable
 
 from . import detectors
 from .env import BrowserEnv, Snapshot
-from .policies import CuriosityPolicy, LLMMemoryPolicy, LLMPolicy, RandomPolicy, SemanticPolicy
+from .policies import (CluePolicy, CuriosityPolicy, LLMMemoryPolicy, LLMPolicy,
+                       OraclePolicy, RandomPolicy, SemanticPolicy, SweepPolicy)
 from .trace import TraceRecorder, replay, save_pack
 
 __all__ = [
-    "CuriosityPolicy", "LLMMemoryPolicy", "LLMPolicy", "RandomPolicy", "SemanticPolicy",
+    "CluePolicy", "CuriosityPolicy", "LLMMemoryPolicy", "LLMPolicy", "OraclePolicy",
+    "RandomPolicy", "SemanticPolicy", "SweepPolicy",
     "EpisodeResult", "run_episode", "diagnose", "verify_pack", "sweep", "POLICIES",
 ]
 
@@ -27,6 +29,9 @@ POLICIES: dict[str, type] = {
     "random": RandomPolicy,
     "curiosity": CuriosityPolicy,
     "semantic": SemanticPolicy,
+    "clue": CluePolicy,
+    "oracle": OraclePolicy,
+    "sweep": SweepPolicy,
     "llm": LLMPolicy,
     "llm_memory": LLMMemoryPolicy,
 }
@@ -165,6 +170,25 @@ def run_episode(
             distinct_states=len(seen), reached_over=snap.over, reached_win=snap.win,
             defect=None, probes=probes, policy_trace=_trace(policy),
         )
+        # 🔴 尸检：局以"输"结束不等于局面本来可赢。
+        # 实测漏报就是这么来的 —— blocky-jump 第 5 层间隙超限，角色连摔三次致死，
+        # episode 因为 over 提前结束，可达性探测一次都没跑，缺陷被判成"没有缺陷"。
+        # 死亡会把不可通关掩盖掉，而"会死"和"赢不了"是两件必须分开说的事。
+        if snap.over and not snap.win and recorder.actions:
+            probes += 1
+            result.probes = probes
+            prefix = [a["action"] for a in recorder.actions][:-1]
+            if prefix:
+                post = diagnose(game_url, seed, prefix, horizon=horizon, headless=headless)
+                if post:
+                    post["found_by_step"] = len(prefix)
+                    post["detail"] = {**post.get("detail", {}),
+                                      "witness_prefix": list(prefix),
+                                      "post_mortem": True,
+                                      "note": post["detail"].get("note", "") +
+                                              "（本局以失败告终，尸检确认此前已无赢的路径）"}
+                    result.defect = post
+                    result.pack = recorder.record_defect(post)
         result.wall_ms = int((time.time() - t0) * 1000)
         return result
     except Exception as exc:  # noqa: BLE001 - 探索器不能因为一个游戏炸掉整批评测

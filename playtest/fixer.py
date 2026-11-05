@@ -166,12 +166,17 @@ def apply_patch(staged: pathlib.Path, patch: dict[str, Any]) -> None:
 
 
 def rerun_defect(url: str, pack: dict[str, Any], horizon: int = 12) -> dict[str, Any] | None:
-    """用同一 (seed, 动作前缀) 重跑，看缺陷判据是否还开火。
+    """用同一 (seed, 走到缺陷局面的动作前缀) 重跑，看缺陷判据是否还开火。
 
     注意这里比的不是哈希 —— 游戏代码已经变了，哈希必然不同。
     要复用的是"走到那个局面的路径"，判据是缺陷本身还在不在。
+
+    🔴 用 witness_prefix 而不是整条 actions：尸检类缺陷是在"致死的那一步之前"
+    诊断出来的，整条重放会走到终局，而终局状态下 probe_deadend 直接返回 None ——
+    那会让任何补丁都被判成"修好了"。
     """
-    prefix = [a["action"] for a in pack["actions"]]
+    prefix = (pack["defect"].get("detail", {}).get("witness_prefix")
+              or [a["action"] for a in pack["actions"]])
     seed = pack["initial_state"]["seed"]
     return diagnose(url, seed, prefix, horizon=horizon)
 

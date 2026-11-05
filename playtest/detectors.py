@@ -40,6 +40,7 @@ def reachability(env: BrowserEnv, horizon: int = 12, fanout_cap: int = 8, budget
 
     terminals: list[dict[str, Any]] = []
     seen: set[str] = set()
+    seen_full: set[str] = set()
     stack: list[tuple[int, dict[str, Any]]] = [(0, origin)]
     states_seen = 0
     truncated = False
@@ -67,6 +68,7 @@ def reachability(env: BrowserEnv, horizon: int = 12, fanout_cap: int = 8, budget
                 break
             snap = env.step(a)
             states_seen += 1
+            seen_full.add(snap.hash)
             if _terminal(snap):
                 terminals.append({"hash": snap.hash, "win": snap.win, "depth": depth + 1, "action": a})
                 continue
@@ -85,7 +87,23 @@ def reachability(env: BrowserEnv, horizon: int = 12, fanout_cap: int = 8, budget
 
     env.restore_state(origin)
     return {"terminals": terminals, "states_seen": states_seen, "truncated": truncated,
-            "distinct_positions": len(seen)}
+            "distinct_positions": len(seen), "distinct_full": len(seen_full)}
+
+
+def key_is_too_coarse(r: dict[str, Any]) -> bool:
+    """识别 key() 投影声明得过粗。
+
+    🔴 症状：探测报"没有任何终局可达"，但全量哈希其实在变 ——
+    说明作者从等价键里漏掉了一个**会影响转移**的字段（实测漏的是 cooldown：
+    它门控着跳跃，不参与等价判定 ⇒ 所有动作在键空间里都成了自环 ⇒
+    工具"看不见"任何进展 ⇒ 把 unwinnable 误报成 softlock）。
+
+    投影过粗时绝不能下 softlock 结论。宁可报"判不了"，也不要报一个错的类型 ——
+    报错类型的代价是别人照着错的诊断去修，修不好还怀疑工具。
+    """
+    if r["terminals"]:
+        return False
+    return r.get("distinct_positions", 0) <= 1 and r.get("distinct_full", 0) > 1
 
 
 def check_step(env: BrowserEnv, snap: Snapshot, prev_errors: int) -> dict[str, Any] | None:
@@ -124,6 +142,9 @@ def probe_deadend(env: BrowserEnv, snap: Snapshot, horizon: int = 12) -> dict[st
         return None
     r = reachability(env, horizon=horizon)
     if r["truncated"]:
+        return None
+    if key_is_too_coarse(r):
+        # 宁可不报，也不报一个错的类型
         return None
     wins = [t for t in r["terminals"] if t["win"]]
     if not r["terminals"]:

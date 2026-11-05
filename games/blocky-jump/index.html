@@ -154,9 +154,10 @@
     },
     isOver: function (s) { return s.won || s.dead; },
     isWin: function (s) { return !!s.won; },
-    // score 与 cooldown 会一直变，但不改变"局面"。不声明投影的话，
-    // 可达性探测会因为状态永不重复而截断 —— 见 protocol/GSPP.md 的 key()。
-    key: function (s) { return { level: s.level, hp: s.hp, won: s.won, dead: s.dead }; },
+    // score 会一直涨但不改变局面；cooldown 会门控跳跃，**必须**参与等价判定。
+    // 漏掉 cooldown 的代价实测过：所有动作在键空间里都成了自环，
+    // 探测看不见任何进展，于是把 unwinnable 误报成 softlock。
+    key: function (s) { return { level: s.level, hp: s.hp, cooldown: s.cooldown, won: s.won, dead: s.dead }; },
     invariants: function (s) {
       var bad = [];
       if (s.hp < 0 || s.hp > 3) bad.push("hp 越界: " + s.hp);
