@@ -194,6 +194,23 @@ def regression(staged_url: str, seeds: list[int], max_steps: int = 40) -> dict[s
     return {"seeds": len(seeds), "defects": kinds, "errors": errors}
 
 
+def fix_verdict(after: dict[str, Any] | None, reg: dict[str, Any]) -> tuple[bool, list[str]]:
+    """"修好了"这个词到底由哪几条腿撑着 —— **纯函数**，负控不用开浏览器。
+
+    🔴 这条是补出来的缺陷：原先 `ok = (after is None)`，回归只进 notes 不进判定。
+    于是"把这一处修好、把别处弄坏"的补丁会被界面写成「红转绿 ✅」，
+    而本模块文档串承诺过"少了后三条，'我修好了'就只是模型的一句话"。
+    现在三条腿都在布尔值里：缺陷不再开火、其余种子没有新缺陷、其余种子没有跑炸。
+    """
+    if after:
+        return False, [f"缺陷仍存在：{after['kind']}"]
+    if reg.get("defects"):
+        return False, [f"引入回归：其余种子出现新缺陷 {reg['defects']}"]
+    if reg.get("errors"):
+        return False, [f"其余种子有 {reg['errors']} 局跑炸 —— 崩溃不是'修好了'的一部分"]
+    return True, ["缺陷判据不再开火"]
+
+
 def fix(
     game_dir: pathlib.Path,
     pack: dict[str, Any],
@@ -224,18 +241,13 @@ def fix(
     after = rerun_defect(patched_url, pack)
     reg = regression(patched_url, regression_seeds or [pack["initial_state"]["seed"] + i for i in range(1, 6)])
 
-    notes = []
+    ok, why = fix_verdict(after, reg)
+    notes = list(why)
     if patch.get("proposer") == "manual":
         notes.append("补丁由人工提供，本次验证的是验证机器本身，不是模型的修复能力")
-    if after:
-        notes.append(f"缺陷仍存在：{after['kind']}")
-    else:
-        notes.append("缺陷判据不再开火")
-    if reg["defects"]:
-        notes.append(f"其余种子出现缺陷：{reg['defects']}")
 
     return FixResult(
-        ok=(after is None),
+        ok=ok,
         proposer=patch.get("proposer", proposer.name),
         patch=patch,
         defect_before=pack["defect"],

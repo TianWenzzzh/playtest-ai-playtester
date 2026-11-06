@@ -87,6 +87,27 @@ else:
     p = prop.propose(pack, srcs)
     check("LLM 产出结构合法的补丁", bool(p) and "old" in (p or {}) and "new" in (p or {}))
 
+print("== 5. 「修好了」这个词的三条腿：回归必须进布尔值，不能只进备注 ==")
+# 补这条的起因（实测出来的缺陷，不是设想）：原先 fix() 里 ok=(after is None)，
+# reg 只往 notes 里写 ⇒ "把这一处修好、把别处弄坏"的补丁会被界面标成「红转绿 ✅」，
+# 而本模块文档串自己承诺过"少了那三条，'我修好了'就只是一句话"。
+from playtest.fixer import fix_verdict
+
+ok_a, why_a = fix_verdict(None, {"seeds": 5, "defects": {"crash": 2}, "errors": 0})
+check("植入回归 ⇒ 判红（旧代码这里会判绿）", ok_a is False, str(why_a))
+check("判红要说清是哪条腿", any("回归" in w for w in why_a), str(why_a))
+ok_b, why_b = fix_verdict(None, {"seeds": 5, "defects": {}, "errors": 3})
+check("其余种子跑炸也不算修好", ok_b is False, str(why_b))
+ok_c, _ = fix_verdict({"kind": "unwinnable"}, {"seeds": 5, "defects": {}, "errors": 0})
+check("缺陷仍在原位 ⇒ 判红", ok_c is False)
+ok_d, why_d = fix_verdict(None, {"seeds": 5, "defects": {}, "errors": 0})
+check("三条腿都过 ⇒ 判绿（正向对照，防我把判据写死成恒红）",
+      ok_d is True and any("不再开火" in w for w in why_d), str(why_d))
+# 现役路径真的用上了这个判定：上面第 2 节那次真修复仍然必须是绿
+check("真夹具那一次仍然判绿（说明新布尔没被写死成恒红）", res.ok is True, "; ".join(res.notes))
+check("真夹具的回归读数干净", res.regression["defects"] == {} and res.regression["errors"] == 0,
+      json.dumps(res.regression, ensure_ascii=False))
+
 print()
 if fails:
     print("M2 修复闭环未通过:", len(fails), "项 ->", "; ".join(fails))
