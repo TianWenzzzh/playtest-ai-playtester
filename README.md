@@ -190,6 +190,11 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
 2. `crypto.getRandomValues` 不受种子控制 ⇒ 用它随机的游戏**不可复现**，
    工具会明确报出来，不会假装复现成功。
 3. WebGL canvas 的像素指纹跨 GPU 未必逐位一致 ⇒ 兜底模式跨机复现强度弱于注册模式。
+   🔴 这条现在有本机读数了：探针自证渲染后端，实测这台开发机一直是软件渲染
+   （`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`）。
+   我们全部位级证据都是**录制与回放同环境**取的，Canvas 2D 在软件渲染下仍逐像素确定，
+   所以确定性结论不受影响；但**不能拿本机的绿去替别人的 GPU 背书**。
+   报警不藏在注释里：`scan` 的 stderr 与界面 stream 面板都会把这句话贴在读数旁边。
 4. 可达性探测受 `horizon` 限制，状态空间大的游戏会截断。
 5. **iframe 里的游戏可以测，但复现包要带对的那份持久状态**。
    实测过"平台壳 + 跨源 iframe"的形态：init script 逐 frame 生效，跨源也能读；
