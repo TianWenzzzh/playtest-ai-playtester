@@ -168,7 +168,8 @@ def _classify(env: BrowserEnv, replayed: bool, initial_ok: bool, persistent: Any
         "not_caused_by": "离线包覆盖不全 —— 未命中为 0、命中全在 exact 档时才会走到这一级",
         "first_check": "先确认录制与回放走的是同一条路径（观测不得推进录制实例的时钟、"
                        "回放要按包里记录的帧时间线补齐）——这两处修好后，"
-                       "真实第三方作品 26/26 与 23/23 步逐帧全等，曾是这一级的那两份包升到 bit_reproducible",
+                       "真实第三方作品 23 步那枚三次重放都 23/23 全等并升到 bit_reproducible；"
+                       "26 步那枚仍留在这一级 —— 同一份包重放三次 20/26→20/26→21/26，分歧点会移动",
         "mitigation": "要拿到 bit_reproducible：游戏侧注册 GSPP adapter 并提供 snapshot/restore，"
                       "或把页面与资源取到本地离线跑（capture --har）",
     }
