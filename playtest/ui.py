@@ -12,12 +12,12 @@ from __future__ import annotations
 import json
 import pathlib
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import gradio as gr
 
 from .agent import POLICIES, run_episode, verify_pack
-from .env import shutdown_browser
 from .fixer import LLMProposer, ManualProposer, fix
 from .llm import LLMClient
 from .trace import pack_id, save_pack
@@ -29,11 +29,21 @@ WORK = ROOT / "out" / "ui"
 # 2 vCPU 上同时开两个 Chromium 会互相拖慢甚至超时；宁可排队。
 _BROWSER_SLOT = threading.Semaphore(1)
 
+# 🔴 Playwright 同步对象绑线程（实测：换线程复用直接 greenlet "Cannot switch to a different thread"），
+# 而 Gradio 每个事件都丢给一个新的 anyio worker 线程 —— 于是"第二次点击就崩"。
+# 所有碰浏览器的活都固定跑在这一条线程上，信号量继续管并发，这条线程管亲和。
+_PW_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pw")
+
+
+def _pw(fn, /, *args, **kwargs):
+    return _PW_THREAD.submit(fn, *args, **kwargs).result()
+
 # 每个夹具的缺陷开关臂（与 benchmark/run.py 的 SUITE 保持同源）
 ARMS: dict[str, list[tuple[str, str]]] = {
     "blocky-jump": [("有缺陷臂 maxgap=6", "?maxgap=6"), ("干净臂 maxgap=3", "?maxgap=3")],
     "maze-exit": [("有缺陷臂 keywall", "?plant=keywall"), ("干净臂 none", "?plant=none")],
     "clicker-quest": [("有缺陷臂 deadend", "?plant=deadend"), ("干净臂 none", "?plant=none")],
+    "vault-run": [("分辨力臂 sealed", "?plant=sealed"), ("干净臂 none", "?plant=none")],
 }
 
 _client = LLMClient()
@@ -75,7 +85,11 @@ def embed(game: str, arm: str) -> str:
 
     path = GAMES_DIR / game / "index.html"
     raw = path.read_text(encoding="utf-8", errors="replace")
-    inject = f"<script>window.__GSPP_ARM__={json.dumps(_arm_dict(arm))};</script>"
+    inject = (f"<script>window.__GSPP_ARM__={json.dumps(_arm_dict(arm))};"
+              # 🔴 预览这份内联副本时没有探针，游戏自己会喊
+              # "Cannot read properties of undefined (reading 'register')"（实测进了评委的控制台）。
+              # 给一个空实现把预览和检测隔开：预览只负责给人看，注册由服务端那个实例做。
+              "window.__GSPP__=window.__GSPP__||{register:function(){return {};}};</script>")
     if "<head>" in raw:
         raw = raw.replace("<head>", "<head>" + inject, 1)
     else:
@@ -119,7 +133,7 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         kw: dict[str, Any] = {"seed": int(seed)}
         if policy in ("llm", "llm_memory"):
             kw.update({"client": _client, "memory": policy == "llm_memory"})
-        res = run_episode(url, int(seed), cls(**kw), max_steps=40)
+        res = _pw(run_episode, url, int(seed), cls(**kw), max_steps=40)
 
         if res.error:
             return f"❌ 运行出错：`{res.error}`", "", "", "", None
@@ -153,6 +167,12 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         _BROWSER_SLOT.release()
 
 
+def _note_json(reason: str) -> str:
+    """🔴 gr.JSON 拿到空串会自己抛 "Invalid JSON string"（实测：评委不按顺序点就看见一屏红）。
+    所有"这一步没做"的分支都要回一份能渲染的 JSON。"""
+    return json.dumps({"skipped": True, "reason": reason}, ensure_ascii=False, indent=2)
+
+
 def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
     src = pack_path if pack_path and pathlib.Path(pack_path).exists() else None
     if not src and pasted.strip():
@@ -160,16 +180,16 @@ def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
         src = str(WORK / "pasted.json")
         pathlib.Path(src).write_text(pasted, encoding="utf-8")
     if not src:
-        return ("先跑一次试玩，或把复现包 JSON 贴进来。", "")
+        return ("先跑一次试玩，或把复现包 JSON 贴进来。", _note_json("还没有复现包"))
     try:
         pack = json.loads(pathlib.Path(src).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return (f"复现包读不出来：`{exc}`", "")
+        return (f"复现包读不出来：`{exc}`", _note_json(f"复现包读不出来：{exc}"))
 
     if not _BROWSER_SLOT.acquire(timeout=90):
-        return ("⏳ 浏览器槽位被占用，请稍后重试。", "")
+        return ("⏳ 浏览器槽位被占用，请稍后重试。", _note_json("浏览器槽位被占用"))
     try:
-        v = verify_pack(pack["game"]["url"], pack)
+        v = _pw(verify_pack, pack["game"]["url"], pack)
     finally:
         _BROWSER_SLOT.release()
 
@@ -189,9 +209,10 @@ def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
 
 def do_fix(game: str, pack_path: str | None, old: str, new: str) -> tuple[str, str]:
     if not pack_path or not pathlib.Path(pack_path).exists():
-        return ("先跑一次试玩拿到复现包。", "")
+        return ("先跑一次试玩拿到复现包。", _note_json("还没有复现包"))
     if not old or not new:
-        return ("补丁的 old / new 都不能为空 —— 空补丁永远不会改变判据。", "")
+        return ("补丁的 old / new 都不能为空 —— 空补丁永远不会改变判据。",
+                _note_json("补丁两端都不能为空"))
 
     pack = json.loads(pathlib.Path(pack_path).read_text(encoding="utf-8"))
     proposer_name = "manual"
@@ -201,9 +222,9 @@ def do_fix(game: str, pack_path: str | None, old: str, new: str) -> tuple[str, s
         proposer_name = "llm"
 
     if not _BROWSER_SLOT.acquire(timeout=120):
-        return ("⏳ 浏览器槽位被占用。", "")
+        return ("⏳ 浏览器槽位被占用。", _note_json("浏览器槽位被占用"))
     try:
-        res = fix(GAMES_DIR / game, pack, proposer, WORK / "fix")
+        res = _pw(fix, GAMES_DIR / game, pack, proposer, WORK / "fix")
     finally:
         _BROWSER_SLOT.release()
 
@@ -238,7 +259,7 @@ def build() -> gr.Blocks:
         with gr.Row():
             with gr.Column(scale=2):
                 game = gr.Dropdown(names, value=names[0] if names else None, label="夹具游戏")
-                arm = gr.Dropdown([a[1] for a in arms], value="?maxgap=6", label="缺陷臂")
+                arm = gr.Dropdown(arms, value="?maxgap=6", label="缺陷臂")
                 policy = gr.Dropdown(sorted(POLICIES), value="curiosity", label="策略")
                 seed = gr.Number(value=20261105, precision=0, label="随机种子")
                 scan_btn = gr.Button("① 开始试玩", variant="primary")

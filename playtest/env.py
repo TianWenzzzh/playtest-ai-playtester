@@ -114,6 +114,9 @@ def shared_browser(headless: bool = True):
     嵌套 sync_playwright().start() 会当场报 "inside the asyncio loop"。
     共享 browser、每个 env 只开自己的 context，既解开嵌套也省下每次重启的开销。
     """
+    if _shared["browser"] is not None and not _shared["browser"].is_connected():
+        # 崩掉的 Chromium 留在缓存里 = 之后每一次请求都必红，而且再也起不来。
+        shutdown_browser()
     if _shared["browser"] is None or _shared["headless"] != headless:
         _shared["pw"] = sync_playwright().start()
         launch_kwargs: dict[str, Any] = {
