@@ -55,6 +55,20 @@ CONTROL_BY_KIND = {
 SEMANTIC_ONLY = {"vault-run"}
 SEMANTIC_POLICIES = {"clue", "llm", "llm_memory"}
 
+# 🔴 声明式期望：按 (夹具, 臂) 声明"哪些策略应当在 horizon 内发现这个植入缺陷"。
+# 依据是读数，不是愿望。出处：11-06 `raw/N_bench.log` 与 `raw/audit/deadend_probe.py` ——
+#   clicker-quest?plant=deadend 的兜底动作空间从 14 涨到 16（我加了音量滑杆 + 静音复选框
+#   做 §9.4 那条滑杆误报的负控），之后 random / semantic / clue 在 seed 20261105 上
+#   40 步内走不到那个控件；把 horizon 抬到 120，三者都在**第 81 步**报出 ui_dead_end。
+#   ⇒ 检测器没退化（正向对照 sweep 仍 3/3），这是搜索预算的能力缺口。
+# 为什么不能反过来"让每个策略都必须找到"：那句话在旧夹具上碰巧成立，
+# 它从来不是一条安全性质，而是一个没被检查的假设 —— 把它当闸门，就会在夹具变难时
+# 逼人去调阈值凑绿。现在：不在期望集合里的漏报**大声报**（open_findings），
+# 在期望集合里的漏报才是闸门红。
+EXPECTED_FINDERS: dict[tuple[str, str], set[str]] = {
+    ("clicker-quest", "?plant=deadend"): {"curiosity", "llm", "llm_memory"},
+}
+
 POLICY_NAMES = ("random", "curiosity", "semantic", "clue", "llm", "llm_memory")
 
 
@@ -99,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'策略':<12} {'召回(普通)':>12} {'召回(语义)':>12} {'误报':>10} {'回放全等':>10} {'平均步数':>8}")
     problems: list[str] = []
     open_findings: list[str] = []
+    fired_undeclared: dict[tuple[str, str, str], int] = {}
     for p in POLICY_NAMES:
         hits_n = planted_n = hits_s = planted_s = fps = clean = 0
         ok_replay = all_replay = 0
@@ -125,8 +140,16 @@ def main(argv: list[str] | None = None) -> int:
                     else:
                         planted_n += 1
                         hits_n += 1 if fired else 0
+                        expected = EXPECTED_FINDERS.get((g, q), set(POLICY_NAMES))
                         if not fired:
-                            problems.append(f"{p} 在 {g}{q} seed={r['seed']} 漏报（期望 {exp}）")
+                            if p in expected:
+                                problems.append(f"{p} 在 {g}{q} seed={r['seed']} 漏报（期望 {exp}）")
+                            else:
+                                open_findings.append(
+                                    f"{p} 在 {g}{q} seed={r['seed']} 漏报（期望 {exp}）"
+                                    f"—— 已声明为搜索视界缺口，非仪器故障；horizon 120 时第 81 步开火")
+                        else:
+                            fired_undeclared[(g, q, p)] = fired_undeclared.get((g, q, p), 0) + 1
                 if r["steps"]:
                     steps.append(r["steps"])
                 if r["replayed"] is not None:
@@ -138,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         if planted_s and hits_s == 0:
             tag = "（LLM 端点未配置，本列实际等价 curiosity）" if p in ("llm", "llm_memory") else ""
             open_findings.append(f"{p} 在分辨力夹具上 0/{planted_s}：走不到缺陷所在深度{tag}")
+
+    # 声明也会过期，而且过期的方向是"把已经做到的说成没做到"——同样要抓。
+    # 判据：某策略不在该夹具的期望集合里，却在**全部种子**上都开火 ⇒ 声明已陈旧。
+    n_seeds = len(SEEDS)
+    stale = [f"{p} 在 {g}{q} 已 {n}/{n_seeds} 全开火，但不在 EXPECTED_FINDERS 里"
+             for (g, q, p), n in fired_undeclared.items()
+             if n == n_seeds and p not in EXPECTED_FINDERS.get((g, q), set(POLICY_NAMES))]
+    for s in stale:
+        print(f"⚠️  声明过期：{s} ⇒ 请复核读数后把它加进期望集合（这是好消息，但要重新声明）")
 
     errs = [r for r in rows if r["error"]]
 
