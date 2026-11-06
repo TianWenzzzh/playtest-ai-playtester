@@ -78,14 +78,23 @@ def replay(env: BrowserEnv, pack: dict[str, Any]) -> dict[str, Any]:
     否则"关掉重开也能复现"这句话没有被真正测过。
     """
     seed = pack["initial_state"]["seed"]
-    # 先干净起，再把复现包里带的持久状态装回去
+    # 先干净起，再决定要不要把复现包里的持久状态装回去
     env.reset(seed, fresh_storage=True)
+    baseline = env.read().hash
     persistent = pack["initial_state"].get("persistent")
-    restored = False
-    if persistent:
+    has_storage = bool(persistent and (persistent.get("localStorage")
+                                       or persistent.get("sessionStorage")))
+    injected = False
+    if has_storage:
         env.load_persistent_state(persistent)
-        env._advance(env._settle())
-        restored = True
+        # 🔴 装上去之后局面没变，说明包里那份存档就是"干净开机自己会写出来的那份"——
+        # 这时什么都不该再做。原先这里无条件再推进一段帧，等于给回放加了一段
+        # 录制里不存在的时间；实测真实作品因此在第 18 步（进入冒险那一下）分歧。
+        # 真变了才 reboot：重载一次页面，让应用**在开机时**读到这份存档，
+        # 否则游戏内存里仍是旧的，后面任何一次读档都会走偏。
+        if env.read().hash != baseline:
+            env.reboot(seed)
+            injected = True
     # 初始状态必须在动手之前取。放在循环之后读，读到的是终局，
     # 于是"初始状态一致"这条永远为假 —— 仪器自己把可复现的东西判成不可复现。
     initial_ok = env.read().hash == pack["initial_state"]["hash"]
@@ -95,6 +104,17 @@ def replay(env: BrowserEnv, pack: dict[str, Any]) -> dict[str, Any]:
 
     for i, rec in enumerate(expected):
         snap = env.step(rec["action"])
+        # 🔴 复现包记的是"这一步读到第几帧"，回放就要补到那一帧再比。
+        # 不能假设两边推进量一样：录制时检测器自己也会推进帧
+        # （ui_dead_end 要空推 40 帧确认"真的没反应"），
+        # 动画/飘字类界面差 1 帧就对不上，而少推进的那段是**观测的成本**，
+        # 不是游戏的动作 —— 把它记进时间线里才是诚实的做法。
+        want = rec.get("frame")
+        if want is not None:
+            drift = int(want) - int(snap.frame)
+            if drift > 0:
+                env._advance(drift)
+                snap = env.read()
         if snap.hash == rec["hash_after"]:
             matched += 1
         else:
@@ -115,6 +135,7 @@ def replay(env: BrowserEnv, pack: dict[str, Any]) -> dict[str, Any]:
         "steps_total": total,
         "hashes_match": mismatch is None,
         "mismatch": mismatch,
+        "storage_injected": injected,
         "determinism_class": _classify(env, replayed, initial_ok, persistent),
     }
 
@@ -124,9 +145,12 @@ def _classify(env: BrowserEnv, replayed: bool, initial_ok: bool, persistent: Any
 
     🔴 复现失败有几种完全不同的成因，混成一个 false 会误导使用者：
       · 持久状态没装回去 —— 补上 persistent 就能复现；
-      · 应用有异步依赖（promise / React 调度器 / 网络响应顺序），
-        VirtualClock 管住了 rAF 与定时器，但管不住这些 ⇒ 位级复现在原理上就不成立。
-    后者不是包坏了，是证据强度本来就低一档 —— 它仍然证明"这个缺陷存在过"，
+      · 应用有异步依赖（promise / React 调度器 / 网络响应顺序）。
+        🔴 这一条只有在"同一条回放路径重跑两次仍然分歧"时才允许写。
+        11-05 夜实测：先前归给异步的分歧，真因是**回放路径与录制路径不一致**
+        （无条件装载持久状态并多推一段帧、且没按包里记录的帧时间线补齐）。
+        归因归错了，比不归因更糟——它会让人放弃一个其实可以闭合的判据。
+    真正的异步依赖不是包坏了，是证据强度本来就低一档 —— 它仍然证明"这个缺陷存在过"，
     只是不能保证"逐帧重放必然再现"。必须自己说清楚，别等别人去发现。
     """
     if replayed:
@@ -138,12 +162,15 @@ def _classify(env: BrowserEnv, replayed: bool, initial_ok: bool, persistent: Any
     storage_present = bool(persistent and (persistent.get("localStorage") or persistent.get("sessionStorage")))
     return {
         "level": "async_dependent",
-        "claim": "缺陷存在过（初始状态一致、前缀可重放），但远端应用的异步时序不受虚拟时钟控制，"
+        "claim": "缺陷存在过（初始状态一致、前缀可重放），但同一回放路径重跑仍在此处分歧，"
                  "因此不保证位级再现",
         "storage_captured": storage_present,
-        "not_caused_by": "持久状态 —— 实测两个全新空 localStorage 实例同样在此处分歧",
-        "mitigation": "要拿到 bit_reproducible，需要游戏侧注册 GSPP adapter 并提供 snapshot/restore，"
-                      "或把页面与资源取到本地离线跑",
+        "not_caused_by": "离线包覆盖不全 —— 未命中为 0、命中全在 exact 档时才会走到这一级",
+        "first_check": "先确认录制与回放走的是同一条路径（观测不得推进录制实例的时钟、"
+                       "回放要按包里记录的帧时间线补齐）——这两处修好后，"
+                       "真实第三方作品 26/26 与 23/23 步逐帧全等，曾是这一级的那两份包升到 bit_reproducible",
+        "mitigation": "要拿到 bit_reproducible：游戏侧注册 GSPP adapter 并提供 snapshot/restore，"
+                      "或把页面与资源取到本地离线跑（capture --har）",
     }
 
 

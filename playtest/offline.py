@@ -2,8 +2,12 @@
 
 **为什么需要它**（06 §8.6）：真实第三方作品几乎都在跑异步 —— 图片、字体、动画的到达顺序
 会漂，于是同一 (seed, 动作序列) 两次跑不出逐帧全等，复现等级只能降到 `async_dependent`。
-那不是检测器没写完，是非确定源还留在网络那一层。虚拟时钟能吃掉 rAF 和定时器，
-但吃不掉"响应什么时候到"。
+虚拟时钟能吃掉 rAF 和定时器，但吃不掉"响应什么时候到"。
+
+⚠️ 11-05 夜的更正：当时我把真实作品上的分歧**全部**归给了这一层，这是错的。
+其中至少两处成因在我自己这边（见 `06` §9.8）；把回放路径对齐之后，
+同一个真实第三方作品的两个种子都做到了逐帧全等（26/26、23/23，`replayed=true`）。
+剩下的异步依赖是真的，但它不再是"这条结论的天花板"，而是要逐条测出来的东西。
 
 **做法**：用 Playwright 把整站响应原样录成一个 `.har`，之后每次都从磁盘回答。三个好处：
   1. 网络延迟这个非确定源被摘掉；
@@ -334,6 +338,40 @@ class OfflineMirror:
             "miss_examples": uniq[:8],
             "passthrough": self.passthrough,
         }
+
+
+def harvest_episodes(url: str, har_path: str | pathlib.Path, *, seeds: list[int],
+                     max_steps: int = 40) -> dict[str, Any]:
+    """让探索自己把缺的字节请出来，再合并回包。
+
+    为什么点击热身不够：`--warm-clicks` 只会按顺序点前几个按钮，它走不到策略会走到的地方。
+    实测就是这样卡住真实作品的位级复现——进入战斗那一步要懒加载 `Card-*.js`，
+    包里却没有，于是未命中的**中止时机**（真实时间）决定了那一刻的 DOM，
+    同一份 (seed, 动作序列) 跨会话给出不同轨迹：覆盖率不够会伪装成"异步不可复现"。
+
+    机制：`BrowserEnv` 同时支持 `offline`（磁盘供字节 + 未命中放行）与 `har_path`（录制），
+    所以一局真实探索本身就能产出一份"走到过哪里"的 har，合并即可。
+    """
+    from .agent import run_episode
+    from .policies import CuriosityPolicy
+
+    har_path = pathlib.Path(har_path)
+    files = [har_path]
+    rows = []
+    for seed in seeds:
+        fresh = har_path.parent / f"{har_path.stem}.ep{seed}.har"
+        res = run_episode(url, seed, CuriosityPolicy(seed), max_steps=max_steps,
+                          offline=OfflineMirror(har_path, on_miss="continue"),
+                          har_path=str(fresh))
+        rows.append({"seed": seed, "steps": res.steps,
+                     "defect": (res.defect or {}).get("kind"), "error": res.error})
+        if fresh.exists():
+            files.append(fresh)
+    merged = merge_hars(files, har_path)
+    for f in files[1:]:
+        f.unlink(missing_ok=True)
+    return {"episodes": rows, "merged": merged,
+            "after": OfflineMirror(har_path).report()}
 
 
 def merge_hars(paths: list[str | pathlib.Path], out: str | pathlib.Path) -> dict[str, Any]:

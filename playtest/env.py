@@ -73,6 +73,8 @@ class Snapshot:
     rng: dict[str, Any] = field(default_factory=dict)
     page_exceptions: list[str] = field(default_factory=list)
     pos: str | None = None
+    # 读这一份指纹时的资产就绪读数（不参与哈希，只用于解释证据强度）
+    assets: dict[str, Any] = field(default_factory=dict)
 
     def eq_key(self) -> str:
         """状态等价键。有投影用投影，没有就用全量哈希。"""
@@ -157,6 +159,9 @@ class BrowserEnv:
         browser_executable: str | None = None,
         har_path: str | None = None,
         offline: Any = None,
+        quiescence: bool = True,
+        settle_step: int = 4,
+        settle_rounds: int = 4,
     ) -> None:
         self.game_url = game_url
         self.headless = headless
@@ -168,6 +173,11 @@ class BrowserEnv:
         # 两者互斥由调用方保证：拿着镜像还去录，录到的就是空包。
         self.har_path = har_path
         self.offline = offline
+        self.quiescence = quiescence
+        self.settle_step = settle_step
+        self.settle_rounds = settle_rounds
+        self.last_pending: dict[str, Any] = {}
+        self.last_settle_rounds = 0   # 静息判据实际用了几轮（0/1 = 一步就稳）
 
         self._browser = None
         self._context = None
@@ -215,6 +225,7 @@ class BrowserEnv:
         self.page.goto(self.game_url, wait_until="load")
         self.frame = self._resolve_frame()
         self._js("window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.drain(240)")
+        self._advance(0)   # 首屏也等资产就绪，否则第一次读到的就是"图还没画出来"那一瞬
         self.started_at = time.time()
 
         meta_mode = self._js("window.__GSPP__ ? window.__GSPP__.mode() : 'absent'")
@@ -319,6 +330,19 @@ class BrowserEnv:
     def persistent_state(self) -> Any:
         return self._js("window.__GSPP__ ? window.__GSPP__.storage() : null")
 
+    def reboot(self, seed: int) -> Snapshot:
+        """带着眼下的持久状态重新开机（不清存储）。
+
+        复现包里的存档只有"应用在开机时读到它"才算真的装回去了：
+        只往 localStorage 里写而不重载，游戏内存里仍是旧的那份，
+        后面任何一次读档都会把回放推到录制里没有的分支上。
+        """
+        self.page.reload(wait_until="load")
+        self.frame = self._resolve_frame()
+        self._js(f"window.__GSPP__.begin({int(seed)})")
+        self._advance(self._settle())
+        return self.read()
+
     def load_persistent_state(self, state: Any) -> bool:
         if state is None:
             return False
@@ -361,6 +385,7 @@ class BrowserEnv:
             clock=snap.get("clock") or {},
             rng=snap.get("rng") or {},
             page_exceptions=all_errors,
+            assets=dict(self.last_pending or {}),
         )
 
     def snapshot_state(self) -> Any:
@@ -390,7 +415,37 @@ class BrowserEnv:
         return int(meta.get("ticksPerAction") or self.settle_frames)
 
     def _advance(self, frames: int) -> None:
+        """推进帧，并且把指纹读在**状态静息**的那一刻，而不是读在"第 n 帧"那一瞬。
+
+        🔴 为什么按帧数读不够：`Date.now`/`performance.now`/rAF/定时器都已经被接管，
+        按帧数读在这些游戏上是确定的。但浏览器还有一类异步是我们接管不到的——
+        **解码与 suspense 边界**：`new Image()` 预加载、懒加载分块挂载、React 的异步边界，
+        它们改的是 DOM/canvas 本身，完成时刻落在真实时间上。
+        实测真实作品连续三个种子都在同一步（进入冒险的那一下）分歧，
+        初始状态一致、前 18-21 步逐帧全等——正是"新场景正在出图"那一步。
+
+        规则：推进 frames 帧，然后反复"推进一小段 + 重读哈希"，直到两次哈希相同
+        或用完预算。动画类永不安息的游戏落到预算上限，而"第 K 帧"这个位置
+        在被接管的时钟下本身就是确定的。
+        """
         self._js(f"window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance({int(frames)})")
+        if not self.quiescence:
+            self.last_pending = self._pending()
+            return
+        prev = self.read().hash
+        rounds = 0
+        for rounds in range(1, self.settle_rounds + 1):
+            self._js(f"window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance({int(self.settle_step)})")
+            now = self.read().hash
+            if now == prev:
+                break
+            prev = now
+        self.last_settle_rounds = rounds
+        self.last_pending = self._pending()
+
+    def _pending(self) -> dict[str, Any]:
+        p = self._js("window.__GSPP__ ? window.__GSPP__.pending() : null")
+        return p or {"undecoded": 0, "broken": 0, "resources": -1}
 
     def _js(self, expr: str, _retry: bool = True) -> Any:
         # 🔴 必须打在 frame 上而不是 page 上：创空间这类页面顶层只是壳，

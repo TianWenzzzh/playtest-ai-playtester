@@ -22,7 +22,7 @@ from typing import Any
 from .agent import POLICIES, run_episode, sweep, verify_pack
 from .env import shutdown_browser
 from .llm import LLMClient, LLMConfig
-from .offline import OfflineMirror, capture, summarize, top_up, warm_clicks
+from .offline import OfflineMirror, capture, harvest_episodes, summarize, top_up, warm_clicks
 from .trace import load_pack, save_pack
 
 
@@ -90,8 +90,14 @@ def cmd_capture(args: argparse.Namespace) -> int:
     if args.top_up:
         # 补包：已知字节从磁盘给，未命中放行去线上取，顺便把走过的深层界面录回来
         info = top_up(args.url, args.har)
+        if args.episodes:
+            # 点击热身走不到的地方，让真实探索自己把缺的分块请出来
+            seeds = [int(s.strip()) for s in args.episodes.split(",") if s.strip()]
+            info["episodes"] = harvest_episodes(args.url, args.har, seeds=seeds,
+                                                max_steps=args.max_steps)
         print(json.dumps(info, ensure_ascii=False, indent=2))
-        print(f"\n补包完成：条目 {info['before']['entries']} → {info['after']['entries']}；"
+        after = info.get("episodes", {}).get("after", info["after"])
+        print(f"\n补包完成：条目 {info['before']['entries']} → {after['entries']}；"
               f"新放行 {info['filled']['passthrough']} 次", file=sys.stderr)
         return 0
     # 热身只在应用自己的 host 里点：平台壳上的"登录""点赞"不该被自动化碰到
@@ -176,6 +182,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="录制期点几下界面，把懒加载的分块也录进包（仅对不消耗别人额度的纯客户端应用用）")
     c.add_argument("--top-up", action="store_true",
                    help="补包：已知字节走磁盘、未命中放行联网录回，再合并进同一个 .har")
+    c.add_argument("--episodes", default=None,
+                   help="补包时再按这些种子跑真实探索（点击热身走不到的地方由探索补上），逗号分隔")
+    c.add_argument("--max-steps", type=int, default=40, help="配合 --episodes 用")
     c.set_defaults(fn=cmd_capture)
 
     b = sub.add_parser("bench", help="跑策略对比基准")

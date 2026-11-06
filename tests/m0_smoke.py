@@ -65,9 +65,23 @@ with BrowserEnv(GAME, headless=True) as env:
     c1 = env.read().clock
     c2 = env.read().clock
     check("不推进时时钟不动", c1["frames"] == c2["frames"], str(c1["frames"]))
-    env._advance(30)
+    # 时钟本身的契约：打 n 帧就是 n 帧，一帧不多。直接打在时钟上，不经 env。
+    env._js("window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance(30)")
     c3 = env.read().clock
-    check("advance(30) 后帧数 +30", c3["frames"] == c1["frames"] + 30, f"{c1['frames']}->{c3['frames']}")
+    check("时钟 advance(30) 恰好 +30 帧", c3["frames"] == c1["frames"] + 30,
+          f"{c1['frames']}->{c3['frames']}")
+    # env._advance 在时钟之上多了一层「等资产就绪」（解码完成时刻不在帧栅格上，
+    # 不等就会把"图还没画出来"那一瞬当成指纹），所以增量只可能 ≥ 30。
+    # 它必须仍然可复现：同一状态下两次调用得到同一个增量。
+    deltas = []
+    for _ in range(2):
+        with BrowserEnv(GAME, headless=True) as e2:
+            e2.start()
+            e2.reset(SEED)
+            f0 = e2.read().clock["frames"]
+            e2._advance(30)
+            deltas.append(e2.read().clock["frames"] - f0)
+    check("env 推进规则可复现且不小于请求帧数", deltas[0] == deltas[1] and deltas[0] >= 30, str(deltas))
 
 print("== 4. 种子真的在控制随机 ==")
 with BrowserEnv(GAME, headless=True) as env:

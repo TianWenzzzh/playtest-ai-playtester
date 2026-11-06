@@ -364,6 +364,24 @@
       return false;
     },
 
+    // 资产就绪读数。图片"什么时候解码完"是浏览器内部的事，不在虚拟时钟的帧栅格上；
+    // 不等它就等于把"图还没画出来"那一瞬当成局面的指纹——实测真实作品在
+    // 进入战斗那一步因此跨跑分歧（前 18 步全等，第 19 步裂开）。
+    // 只用于决定"什么时候可以开始计时"，不参与状态哈希。
+    pending: function () {
+      var undecoded = 0, broken = 0;
+      try {
+        var list = document.images;
+        for (var i = 0; i < list.length; i++) {
+          if (!list[i].complete) undecoded++;
+          else if (!list[i].naturalWidth) broken++;
+        }
+      } catch (e) {}
+      var resources = 0;
+      try { resources = performance.getEntriesByType("resource").length; } catch (e) {}
+      return { undecoded: undecoded, broken: broken, resources: resources };
+    },
+
     clock: function () { return window.__GSPP_CLOCK__ ? window.__GSPP_CLOCK__.state() : null; },
     rng: function () { return window.__GSPP_RANDOM__ ? window.__GSPP_RANDOM__.state() : null; },
 
