@@ -193,6 +193,7 @@ class BrowserEnv:
         quiescence: bool = True,
         settle_step: int = 4,
         settle_rounds: int = 4,
+        settle_poll_ms: int = 90,
     ) -> None:
         self.game_url = game_url
         self.headless = headless
@@ -207,6 +208,9 @@ class BrowserEnv:
         self.quiescence = quiescence
         self.settle_step = settle_step
         self.settle_rounds = settle_rounds
+        self.settle_poll_ms = settle_poll_ms
+        self._res_prev = -1          # 上一次读到的资源条目数，用来判"还有没有请求在途"
+        self.settle_unsettled = False  # 预算用完仍未静息（如实报，不当已静息用）
         self.last_pending: dict[str, Any] = {}
         self.last_settle_rounds = 0   # 静息判据实际用了几轮（0/1 = 一步就稳）
 
@@ -422,7 +426,7 @@ class BrowserEnv:
             clock=snap.get("clock") or {},
             rng=snap.get("rng") or {},
             page_exceptions=all_errors,
-            assets=dict(self.last_pending or {}),
+            assets={**(self.last_pending or {}), "settle_unsettled": self.settle_unsettled},
         )
 
     def snapshot_state(self) -> Any:
@@ -471,14 +475,35 @@ class BrowserEnv:
             return
         prev = self.read().hash
         rounds = 0
+        pend = self._pending()
+        res_seen = pend.get("resources", -1)
+        self.last_pending = pend
+        self.settle_unsettled = False
         for rounds in range(1, self.settle_rounds + 1):
+            # 🔴 为什么必须真的等一会儿：被接管的时钟只在**我们叫它走**的时候走，
+            # "推进 16 帧"消耗的墙钟时间≈0，而图片解码是落在真实时间上的任务。
+            # 只按帧数判静息，等于在解码还没落地的那一瞬间读指纹 ——
+            # 实测真实作品那枚 26 步包就是这么在卡牌/卡组切换处翻面的
+            # （同一份包三次重放 20/26 → 20/26 → 21/26，分歧点自己移动）。
+            # 规则：**没有在途工作时一步都不等**（四个夹具零成本），
+            # 只有 undecoded>0 / 资源数在涨 / 哈希还在变 时才睡一小段真实时间再判。
+            if rounds > 1 or pend.get("undecoded", 0) or res_seen != self._res_prev:
+                time.sleep(self.settle_poll_ms / 1000.0)
             self._js(f"window.__GSPP_CLOCK__ && window.__GSPP_CLOCK__.advance({int(self.settle_step)})")
             now = self.read().hash
-            if now == prev:
+            pend = self._pending()
+            self.last_pending = pend
+            quiet = (now == prev and not pend.get("undecoded", 0)
+                     and pend.get("resources", -1) == res_seen)
+            if quiet:
                 break
-            prev = now
+            prev, res_seen = now, pend.get("resources", -1)
+        else:
+            # 用完预算仍不安息：要么是动画类（本来就一直动），要么是解码没落地。
+            # 如实记一笔，让报告能说"这份读数是在没静息的地方取的"。
+            self.settle_unsettled = bool(pend.get("undecoded", 0))
+        self._res_prev = res_seen
         self.last_settle_rounds = rounds
-        self.last_pending = self._pending()
 
     def _pending(self) -> dict[str, Any]:
         p = self._js("window.__GSPP__ ? window.__GSPP__.pending() : null")
