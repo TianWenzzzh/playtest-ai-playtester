@@ -53,6 +53,8 @@ class EpisodeResult:
     error: str | None = None
     probes: int = 0
     policy_trace: dict[str, Any] = None  # type: ignore[assignment]
+    # 渲染后端报警（软件渲染时非空）。不参与任何哈希，只影响证据强度的表述。
+    render_note: str = ""
 
 
 def _trace(policy: Any) -> dict[str, Any]:
@@ -111,6 +113,7 @@ def run_episode(
     recorder: TraceRecorder | None = None
     try:
         env.start()
+        render_note = env.render_note
         recorder = TraceRecorder(env, seed)
         seen: set[str] = {recorder.start.hash}
         history: list[str] = []
@@ -165,6 +168,7 @@ def run_episode(
                     seed=seed, policy=policy.name, steps=len(recorder.actions), frames=snap.frame,
                     distinct_states=len(seen), reached_over=snap.over, reached_win=snap.win,
                     defect=defect, probes=probes, policy_trace=_trace(policy),
+                    render_note=render_note,
                 )
                 result.pack = recorder.record_defect(defect)
                 result.wall_ms = int((time.time() - t0) * 1000)
@@ -174,6 +178,7 @@ def run_episode(
             seed=seed, policy=policy.name, steps=len(recorder.actions), frames=snap.frame,
             distinct_states=len(seen), reached_over=snap.over, reached_win=snap.win,
             defect=None, probes=probes, policy_trace=_trace(policy),
+            render_note=render_note,
         )
         # 🔴 尸检：局以"输"结束不等于局面本来可赢。
         # 实测漏报就是这么来的 —— blocky-jump 第 5 层间隙超限，角色连摔三次致死，
@@ -239,6 +244,7 @@ def sweep(
             "reached_win": res.reached_win, "wall_ms": res.wall_ms, "probes": res.probes,
             "policy": res.policy, "policy_trace": res.policy_trace or {},
             "defect": None, "pack_id": None, "replayed": None, "error": res.error,
+            "render_note": res.render_note,
         }
         if res.defect:
             row["defect"] = {"kind": res.defect["kind"], "signature": res.defect["signature"]}

@@ -309,6 +309,37 @@
       return s.pos || null;
     },
 
+    // 渲染后端自证。为什么这是判据层的事而不是装饰：
+    // 无头浏览器没有 GPU 直通时会**静默**退回软件渲染（SwiftShader / llvmpipe），
+    // 那时 canvas 像素指纹会大面积同色 ⇒ "画面没动"类判据会把**渲染降级**误判成**游戏坏了**。
+    // 🔴 只问自己新建的离屏 canvas，绝不碰游戏自己的 canvas：
+    //   对一个尚无上下文的 canvas 调 getContext("2d") 会替它建好 2d 上下文，
+    //   游戏随后想建 WebGL 就建不成了 —— 那等于仪器把被测对象改了。
+    render: function () {
+      var out = { webgl: false, renderer: null, vendor: null, software: false, masked: false, error: null };
+      try {
+        var c = document.createElement("canvas");
+        c.width = 2; c.height = 2;
+        var gl = c.getContext("webgl2") || c.getContext("webgl") || c.getContext("experimental-webgl");
+        if (!gl) { out.error = "no-webgl-context"; return out; }
+        out.webgl = true;
+        var ext = gl.getExtension("WEBGL_debug_renderer_info");
+        if (ext) {
+          out.renderer = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "");
+          out.vendor = String(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || "");
+        } else {
+          out.renderer = String(gl.getParameter(gl.RENDERER) || "");
+          out.vendor = String(gl.getParameter(gl.VENDOR) || "");
+          out.masked = true;   // 拿不到未掩码串 ⇒ 只能靠关键字猜，读数强度低一档，如实标出来
+        }
+        out.software = /swiftshader|llvmpipe|software|mesa offscreen|microsoft basic/i
+          .test(out.renderer + " " + out.vendor);
+      } catch (e) {
+        out.error = String(e);
+      }
+      return out;
+    },
+
     actions: function () {
       if (adapter && adapter.actions) {
         try {

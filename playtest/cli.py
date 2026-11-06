@@ -66,6 +66,11 @@ def cmd_scan(args: argparse.Namespace) -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
     print(f"\n{len(seeds)} 局 · 开火 {len(hits)} · 回放通过 "
           f"{sum(1 for e in hits if e.get('replayed'))}", file=sys.stderr)
+    for note in dict.fromkeys(e.get("render_note") or "" for e in report["episodes"]):
+        if note:
+            # 🔴 软件渲染下"画面没动"是仪器的环境，不是游戏的缺陷 —— 报警必须出现在读数旁边，
+            # 而不是藏在代码注释里等人想起来。
+            print(f"渲染后端：{note}", file=sys.stderr)
     if mirror is not None:
         m = mirror.report()
         print(f"离线镜像：命中 {m['served']}（{m['served_by']}）· 未命中 {m['miss_calls']}",

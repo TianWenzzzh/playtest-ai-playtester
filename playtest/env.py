@@ -60,6 +60,34 @@ def resolve_browser() -> str | None:
     return None
 
 
+_SOFTWARE_GL = ("swiftshader", "llvmpipe", "software", "mesa offscreen", "microsoft basic")
+
+
+def render_warning(info: dict[str, Any]) -> str:
+    """渲染后端读数 → 该不该报警的一句话。**纯函数**，负控不用开浏览器。
+
+    为什么要有这条：无头浏览器没有 GPU 直通时会**静默**退回软件渲染，
+    canvas 像素指纹因此可能大面积同色 —— 那会被"画面没动"类判据读成游戏坏了。
+    报警而不是闭眼跑，是这条判据的底线。
+    """
+    if not info:
+        return ""
+    if info.get("error"):
+        return f"渲染后端读不到（`{info['error']}`）⇒ canvas 像素指纹的强度未知"
+    blob = f"{info.get('renderer') or ''} {info.get('vendor') or ''}".lower()
+    if any(k in blob for k in _SOFTWARE_GL):
+        return (f"🔴 软件渲染（`{info.get('renderer')}`）：本机没有 GPU 直通。"
+                "① Canvas2D 像素指纹仍逐像素确定（我们全部位级读数都是在这同一环境下取的，"
+                "录制与回放同环境 ⇒ 确定性结论不受影响）；"
+                "② 但 WebGL 类游戏的画面在这里可能被软件层改写或拖慢，"
+                "**跨机复现强度弱一档**，且'画面没动'类判据可能把渲染降级误判成游戏坏了；"
+                "③ 换到真 GPU（如 DGX Spark）上重跑，WebGL 指纹不保证逐位一致 —— 这条要如实写进限制，"
+                "不能拿本机的绿去替别人机器背书。")
+    if info.get("masked"):
+        return "⚠️ 只拿到掩码后的 renderer 串 ⇒ 是否软件渲染判不准，强度降一档"
+    return ""
+
+
 @dataclass
 class Snapshot:
     frame: int
@@ -187,6 +215,8 @@ class BrowserEnv:
         self.page = None
         self.frame = None
         self.mode = "unstarted"
+        self.render: dict[str, Any] = {}        # 渲染后端自证（环境量，不参与哈希）
+        self.render_note = ""                   # 软件渲染时该报警的那句话
         self.page_exceptions: list[str] = []
         self.asset_errors: list[str] = []
         self.relinks = 0  # 导航把 frame 句柄打碎后重新解析的次数
@@ -238,6 +268,10 @@ class BrowserEnv:
                 "常见原因是应用还在更深层 iframe 里，或该 frame 跨域不可注入。"
             )
         self.mode = meta_mode
+        # 渲染后端读一次就够（它是环境量，不是状态量）：软件渲染下 canvas 像素指纹
+        # 会大面积同色，"画面没动"类判据会把渲染降级误判成游戏坏了 ⇒ 必须当场报警。
+        self.render = self._js("window.__GSPP__.render ? window.__GSPP__.render() : {}") or {}
+        self.render_note = render_warning(self.render)
         snap = self.read()
         # 🔴 静默失明是本工具最危险的失败模式：外层壳页面也是合法 DOM，
         # 探针会读到"33 个节点、零按钮、零文本"，然后如实报告"没有缺陷"。

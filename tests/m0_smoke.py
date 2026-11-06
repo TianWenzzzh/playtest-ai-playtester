@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from playtest.agent import CuriosityPolicy, LLMPolicy, RandomPolicy, SemanticPolicy, run_episode, verify_pack
-from playtest.env import BrowserEnv
+from playtest.env import BrowserEnv, render_warning
 from playtest.trace import TraceRecorder, pack_id, save_pack
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -143,6 +143,48 @@ if not llm.client.cfg.available():
 else:
     check("LLM 臂真的走通了模型调用", rl.policy_trace.get("llm_hits", 0) > 0,
           json.dumps(rl.policy_trace.get("calls", {}), ensure_ascii=False))
+
+print("== 9. 渲染后端自证：软件渲染必须报警，且仪器不许改动被测游戏 ==")
+# 为什么这条值得进冒烟闸门：无头浏览器没有 GPU 直通时会**静默**退回 SwiftShader，
+# 那时 canvas 像素指纹大面积同色 —— "画面没动"类判据会把渲染降级误判成游戏坏了。
+# 不报警就是闭眼跑。（成因来自外部调研报告 08 A1，落地前先量我们自己会不会中招。）
+env9 = BrowserEnv(GAME, headless=True)
+try:
+    env9.start()
+    r9 = dict(env9.render or {})
+    check("探针报得出渲染后端", bool(r9.get("renderer")) or bool(r9.get("error")),
+          json.dumps(r9, ensure_ascii=False)[:150])
+    check("环境量已归集成报警句", isinstance(env9.render_note, str))
+    if r9.get("software"):
+        check("本机是软件渲染 ⇒ 必须正在报警", "软件渲染" in env9.render_note, env9.render_note[:80])
+    else:
+        check("本机不是软件渲染 ⇒ 不许误报", env9.render_note == "",
+              f"renderer={r9.get('renderer')!r} note={env9.render_note[:60]!r}")
+
+    # 🔴 关键不变量：读渲染后端这件事**不许改变游戏**。
+    # 若探针去碰游戏自己的 canvas（对无上下文的 canvas 调 getContext 会替它建上下文），
+    # 状态指纹就会动 —— 那是仪器改被测物。用改前/改后同帧哈希直接判。
+    before = env9.read().hash
+    mid = env9._js("window.__GSPP__.render()")
+    after = env9.read().hash
+    check("重复读渲染后端不改变状态哈希", before == after,
+          f"{before[:12]} vs {after[:12]} · renderer={str((mid or {}).get('renderer'))[:40]}")
+    check("渲染后端读数跨调用一致（环境量该有的样子）",
+          (mid or {}).get("renderer") == (env9._js("window.__GSPP__.render()") or {}).get("renderer"))
+finally:
+    env9.close()
+
+# 分类器两臂：不开浏览器就能判它会不会咬人。
+soft = render_warning({"webgl": True, "renderer": "ANGLE (Google, Vulkan 0.0.0 "
+                         "(SwiftShader, llvmpipe)", "vendor": "Google Inc.", "software": True})
+hard = render_warning({"webgl": True, "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060)",
+                       "vendor": "NVIDIA", "software": False})
+masked = render_warning({"webgl": True, "renderer": "WebKit WebGL", "vendor": "WebKit",
+                         "software": False, "masked": True})
+check("植入 SwiftShader ⇒ 分类器开火", "软件渲染" in soft, soft[:60])
+check("真 GPU ⇒ 分类器沉默", hard == "", hard[:60])
+check("掩码串 ⇒ 降档而不是沉默", "掩码" in masked, masked[:60])
+check("空读数不许编出一句报警", render_warning({}) == "")
 
 print()
 if fails:

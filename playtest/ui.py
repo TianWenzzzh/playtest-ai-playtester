@@ -159,6 +159,8 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         )
         stream = (f"步数 {res.steps} · 状态 {res.distinct_states} · 探测 {res.probes} 次 · "
                   f"{res.wall_ms} ms\n\n" + _decision_table(res.policy_trace or {}))
+        if res.render_note:
+            stream = f"{res.render_note}\n\n{stream}"
 
         WORK.mkdir(parents=True, exist_ok=True)
         path = save_pack(res.pack, WORK / f"{game}-{int(seed)}-{pack_id(res.pack)}.json")
