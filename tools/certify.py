@@ -35,6 +35,7 @@ FAST_FILES = (
     "tests/m5_corpus.py",
     "tests/m6_benchmark_note.py",
     "tests/m7_outward_wording.py",
+    "tests/m8_llm_client.py",
 )
 FULL_EXTRA_FILES = (
     "tests/m3_offline.py",

@@ -288,6 +288,7 @@ tests/            m0_smoke（确定性内核）/ m1_fallback（零接入）/ m2_
                   m4_certify（认证器红绿负控）/ m5_corpus（外部语料台账负控）
                   m6_benchmark_note（基准表零命中的归因只认降级读数，不认列名）
                   m7_outward_wording（门面不许无界量词；成本类行数必须等于 adapter_linecount 的现测值）
+                  m8_llm_client（模型客户端 HTTP 行为：默认不发魔搭不支持的 response_format；失败时错误体真因进 last_error）
                   real_targets（真实第三方作品）—— 各项断言数以运行输出为准，文档里不抄数
 tools/            certify.py（一键认证）/ corpus.py（外部语料校验）/ replay_repeat.py（同快照连重放 N 遍）
                   adapter_linecount.py（现测注册块行数分布；m7 判据 5 与门面文档共用这一把尺）

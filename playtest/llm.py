@@ -79,7 +79,7 @@ class LLMClient:
         self.cfg = config or LLMConfig.from_env()
         self.stat = CallStat()
 
-    def complete(self, messages: list[dict[str, str]], force_json: bool = True) -> str | None:
+    def complete(self, messages: list[dict[str, str]], force_json: bool = False) -> str | None:
         if not self.cfg.available():
             self.stat.last_error = self.cfg.reason_unavailable()
             return None
@@ -115,6 +115,12 @@ class LLMClient:
             self.stat.total_prompt_tokens += int(usage.get("prompt_tokens") or 0)
             self.stat.total_completion_tokens += int(usage.get("completion_tokens") or 0)
             return choice
+        except urllib.error.HTTPError as exc:
+            self.stat.failures += 1
+            # 状态行（HTTP Error 400）会盖住真因；错误体里才有端点拒绝的具体理由。
+            detail = exc.read().decode("utf-8", "replace")
+            self.stat.last_error = f"HTTPError {exc.code}: {detail}"[:200]
+            return None
         except (urllib.error.URLError, KeyError, json.JSONDecodeError, TimeoutError) as exc:
             self.stat.failures += 1
             self.stat.last_error = f"{type(exc).__name__}: {exc}"[:200]
