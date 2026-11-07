@@ -122,6 +122,29 @@ def main() -> int:
     check("默认模型在现役名册内", default_model in roster,
           f"default={default_model!r} roster_size={len(roster)}")
 
+    # 共享端点上修复 proposer 的大 prompt 实测连续 4 次被 30s 客户端超时切断
+    # （t3b run4/run5 各 2 次重试全 TimeoutError ⇒ "llm 未给出补丁/仍然红"），
+    # 而玩法小 prompt ~22s 能过 ⇒ 30s 默认对 proposer 系统性偏短。
+    # from_env 默认放宽到 90s，并允许 PLAYTEST_LLM_TIMEOUT 覆盖（Spark/本地可另调）。
+    print("== 5. 客户端超时默认要够共享端点 proposer 用，且可 env 覆盖 ==")
+    saved_to = os.environ.pop("PLAYTEST_LLM_TIMEOUT", None)
+    try:
+        default_to = LLMConfig.from_env().timeout_s
+    finally:
+        if saved_to is not None:
+            os.environ["PLAYTEST_LLM_TIMEOUT"] = saved_to
+    check("from_env 默认超时 >= 60s（30s 实测切断 proposer）", default_to >= 60,
+          f"default_timeout_s={default_to}")
+    os.environ["PLAYTEST_LLM_TIMEOUT"] = "5"
+    try:
+        override_to = LLMConfig.from_env().timeout_s
+    finally:
+        if saved_to is not None:
+            os.environ["PLAYTEST_LLM_TIMEOUT"] = saved_to
+        else:
+            os.environ.pop("PLAYTEST_LLM_TIMEOUT", None)
+    check("PLAYTEST_LLM_TIMEOUT 覆盖生效", override_to == 5.0, f"override={override_to}")
+
     print()
     if fails:
         print("M8 模型客户端未通过:", len(fails), "项 ->", "; ".join(fails))

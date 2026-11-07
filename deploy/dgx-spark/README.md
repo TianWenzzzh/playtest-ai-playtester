@@ -134,7 +134,7 @@ DGX Spark（arm64, GB10）
 | 项 | 本机实测（11-06） | Spark 目标格 | 取数命令 / 未测原因 |
 |---|---|---|---|
 | 部署形态 | 单进程 Gradio + 共享单浏览器（信号量 1） | 四容器 compose | `deploy/dgx-spark/serve.sh` 已有；节点未开通 ⇒ **未测** |
-| 基座模型 | 无端点 ⇒ LLM 臂实际等价 `curiosity`（表里已如实标注） | 主循环 MoE 小激活 + 重推理档 | 见 §2 选型论证 |
+| 基座模型 | 11-06 本地那轮无端点 ⇒ LLM 臂等价 `curiosity`；11-07 创空间已配 API Inference 端点并真实调用（llm 臂有命中） | 主循环 MoE 小激活 + 重推理档 | 见 §2 选型论证 |
 | 出词速度 | — | `___ tok/s` | 🔴 **未测**：`bench.py --rounds`（需端点）；官方教程口径 35B-A3B ≈110 tok/s 是**别人机器**的数 |
 | 端到端耗时（单局试玩） | **中位 3.55 s / 均值 4.26 s / p95 11.2 s / 最大 14.3 s**（144 局） | `___` | `out/benchmark.json` 的 `wall_ms` 逐局求；144 局局内计时合计 613 s |
 | 整轮基准墙钟 | **12 分 09 秒**（11-06 上午那次独立跑批：09:46:54 → 09:58:58，144 局 + 54 次复现校验；起止取自开发工作区日志 mtime，**该日志不随仓库分发**） | `___` | 仓内复算：跑 `PYTHONUTF8=1 python tools/certify.py full`，读 `evidence/latest.json` 里 `benchmark.run` 那一步的 `duration_ms`。🔴 那是**另一次跑批**的数，与左格不可互借（认证器逐步记 `started_at`/`duration_ms`，所以这个量现在仓内可复算） |

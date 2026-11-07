@@ -257,6 +257,11 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
   选 **MoE 小激活**（如 Qwen3-30B-A3B NVFP4）而不是稠密 70B；
 - `nvidia-smi` 读不到显存（统一内存），SGLang 的 `--mem-fraction-static` 要降到 ~0.75。
 
+🔴 **诚实边界：我们没有拿到 DGX Spark 真机节点**（赛题算力名额已被抢完）。上面是
+**部署方案 + 工具侧等价验证，不是 Spark 实测**：在本地 x86 + 软件渲染（SwiftShader）上跑同一套
+策略 / 回放 / 认证代码，把 `sm_121`、统一内存、arm64 wheel 三处差异逐条列在
+[`deploy/dgx-spark/`](deploy/dgx-spark/) 并说明推算依据；凡标「未测」的格子都没有真机读数。
+
 ---
 
 ## 与既有工作的边界

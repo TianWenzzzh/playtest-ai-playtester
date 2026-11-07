@@ -39,12 +39,14 @@ class LLMConfig:
         if not base and key and not os.environ.get("PLAYTEST_API_KEY"):
             base = MODELSCOPE_BASE
         # 默认须是魔搭 API Inference 现役 ID；Spark 本地 serving 另设 PLAYTEST_MODEL，不用此默认。
+        # proposer 的大 prompt 在共享端点上实测 >30s，默认放宽到 90s；Spark/本地可用 PLAYTEST_LLM_TIMEOUT 覆盖。
         return cls(
             base_url=base.rstrip("/"),
             api_key=key,
             model=os.environ.get("PLAYTEST_MODEL", "Qwen/Qwen3.5-35B-A3B"),
             temperature=float(os.environ.get("PLAYTEST_TEMP", "0.2")),
             max_tokens=int(os.environ.get("PLAYTEST_MAX_TOKENS", "400")),
+            timeout_s=float(os.environ.get("PLAYTEST_LLM_TIMEOUT", "90")),
         )
 
     def available(self) -> bool:
