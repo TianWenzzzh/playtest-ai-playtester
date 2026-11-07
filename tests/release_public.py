@@ -92,14 +92,14 @@ def body_text(page: Any) -> str:
     return page.locator("body").inner_text()
 
 
-def wait_body(page: Any, needles: tuple[str, ...], timeout_s: int = 300) -> str:
+def wait_body(scope: Any, needles: tuple[str, ...], timeout_s: int = 300) -> str:
     deadline = time.monotonic() + timeout_s
     text = ""
     while time.monotonic() < deadline:
-        text = body_text(page)
+        text = body_text(scope)
         if any(needle in text for needle in needles):
             return text
-        page.wait_for_timeout(250)
+        time.sleep(0.25)
     raise AssertionError(f"等待公开页结果超时：{needles}；文本尾：{text[-800:]}")
 
 
@@ -120,7 +120,22 @@ def open_tab(page: Any, name: str) -> None:
     page.get_by_role("tab", name=name, exact=True).click()
 
 
-def open_cold_page(browser: Any, url: str, label: str) -> tuple[Any, list[str], list[str]]:
+APP_IFRAME = 'iframe[src*=".ms.show"]'
+
+
+def resolve_scope(page: Any) -> Any:
+    """应用可能直接跑在主文档（本地/自托管 Gradio），也可能被创空间外壳塞进跨域 iframe。
+    主 frame 先试，读不到按钮再切到 ms.show 的 iframe —— 那是创空间公开入口的真实形状。"""
+    try:
+        page.get_by_role("button", name=BUTTONS[0], exact=True).wait_for(state="visible", timeout=10_000)
+        return page
+    except Exception:
+        scope = page.frame_locator(APP_IFRAME)
+        scope.get_by_role("button", name=BUTTONS[0], exact=True).wait_for(state="visible", timeout=90_000)
+        return scope
+
+
+def open_cold_page(browser: Any, url: str, label: str) -> tuple[Any, Any, list[str], list[str]]:
     """独立 context 的全新冷启动；顺带录 pageerror 与推理请求，用于'首屏不依赖模型'那条。"""
     page_errors: list[str] = []
     inference_requests: list[str] = []
@@ -136,7 +151,7 @@ def open_cold_page(browser: Any, url: str, label: str) -> tuple[Any, list[str], 
     page.on("request", on_request)
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=90_000)
-        page.get_by_role("button", name="① 开始试玩", exact=True).wait_for(state="visible", timeout=90_000)
+        scope = resolve_scope(page)
         page.wait_for_timeout(2_000)
         page.screenshot(path=str(OUT / f"{label}-landing.png"), full_page=True)
         check(f"{label} HTTP 冷启动成功", response is not None and response.ok,
@@ -145,7 +160,7 @@ def open_cold_page(browser: Any, url: str, label: str) -> tuple[Any, list[str], 
     except Exception:
         context.close()
         raise
-    return page, page_errors, inference_requests
+    return page, scope, page_errors, inference_requests
 
 
 def verify_repo_clone(repo_url: str) -> pathlib.Path | None:
@@ -196,37 +211,37 @@ def verify_repo_clone(repo_url: str) -> pathlib.Path | None:
 
 
 def verify_public_actions(browser: Any, url: str, needles: list[str]) -> list[str]:
-    page, page_errors, inferences = open_cold_page(browser, url, "public-normal-actions")
+    page, scope, page_errors, inferences = open_cold_page(browser, url, "public-normal-actions")
     try:
-        text = body_text(page)
+        text = body_text(scope)
         missing = [needle for needle in needles if needle not in text]
         check("公开首屏完整展示封存台账", not missing, "缺：" + repr(missing))
         check("公开三按钮各恰好可见一次",
-              all(page.get_by_role("button", name=name, exact=True).count() == 1 for name in BUTTONS))
+              all(scope.get_by_role("button", name=name, exact=True).count() == 1 for name in BUTTONS))
 
-        pick(page, "夹具游戏", "blocky-jump")
-        pick(page, "缺陷臂", "有缺陷臂 maxgap=6")
-        pick(page, "策略", "clue")
-        seed = page.locator('input[aria-label="随机种子"]').first
+        pick(scope, "夹具游戏", "blocky-jump")
+        pick(scope, "缺陷臂", "有缺陷臂 maxgap=6")
+        pick(scope, "策略", "clue")
+        seed = scope.locator('input[aria-label="随机种子"]').first
         seed.fill("20261106")
         seed.press("Tab")
 
-        page.get_by_role("button", name="① 开始试玩", exact=True).click()
-        scan_text = wait_body(page, ("本局结论", "运行出错"))
+        scope.get_by_role("button", name="① 开始试玩", exact=True).click()
+        scan_text = wait_body(scope, ("本局结论", "运行出错"))
         page.screenshot(path=str(OUT / "public-normal-scan.png"), full_page=True)
         check("公开试玩返回真实缺陷而非静默", "本局结论" in scan_text and "运行出错" not in scan_text,
               scan_text[scan_text.find("本局结论"):][:260] if "本局结论" in scan_text else scan_text[-260:])
 
-        open_tab(page, "复现包")
-        page.get_by_role("button", name="② 一键复现", exact=True).click()
-        replay_text = wait_body(page, ("回放校验：", "运行出错"))
+        open_tab(scope, "复现包")
+        scope.get_by_role("button", name="② 一键复现", exact=True).click()
+        replay_text = wait_body(scope, ("回放校验：", "运行出错"))
         page.screenshot(path=str(OUT / "public-normal-replay.png"), full_page=True)
         check("公开一键复现逐帧通过",
               "回放校验：通过" in replay_text and "bit_reproducible" in replay_text, replay_text[:260])
 
-        open_tab(page, "修复补丁")
-        page.get_by_role("button", name="③ 自动修复", exact=True).click()
-        fix_text = wait_body(page, ("修复结果：", "运行出错"), timeout_s=420)
+        open_tab(scope, "修复补丁")
+        scope.get_by_role("button", name="③ 自动修复", exact=True).click()
+        fix_text = wait_body(scope, ("修复结果：", "运行出错"), timeout_s=420)
         page.screenshot(path=str(OUT / "public-normal-fix.png"), full_page=True)
         check("公开修复显示红转绿并标明补丁来源",
               "修复结果：红转绿" in fix_text and ("人工提供" in fix_text or "模型生成" in fix_text),
@@ -238,9 +253,9 @@ def verify_public_actions(browser: Any, url: str, needles: list[str]) -> list[st
 
 
 def verify_model_degraded(browser: Any, url: str, needles: list[str]) -> None:
-    page, _, requests = open_cold_page(browser, url, "public-model-disabled")
+    page, scope, _, requests = open_cold_page(browser, url, "public-model-disabled")
     try:
-        text = body_text(page)
+        text = body_text(scope)
         missing = [needle for needle in needles if needle not in text]
         check("模型禁用实例仍展示封存台账", not missing, "缺：" + repr(missing))
         check("模型禁用实例明确说明端点未配置", "推理端点未配置" in text, text[:260])
@@ -250,13 +265,13 @@ def verify_model_degraded(browser: Any, url: str, needles: list[str]) -> None:
 
 
 def verify_browser_degraded(browser: Any, url: str, needles: list[str]) -> None:
-    page, _, _ = open_cold_page(browser, url, "public-browser-disabled")
+    page, scope, _, _ = open_cold_page(browser, url, "public-browser-disabled")
     try:
-        landing = body_text(page)
+        landing = body_text(scope)
         missing = [needle for needle in needles if needle not in landing]
         check("Chromium 禁用实例仍展示封存台账", not missing, "缺：" + repr(missing))
-        page.get_by_role("button", name="① 开始试玩", exact=True).click()
-        failed = wait_body(page, ("运行出错",), timeout_s=180)
+        scope.get_by_role("button", name="① 开始试玩", exact=True).click()
+        failed = wait_body(scope, ("运行出错",), timeout_s=180)
         page.screenshot(path=str(OUT / "public-browser-disabled-scan.png"), full_page=True)
         check("Chromium 禁用实例明确报运行层且不冒充实时成功",
               "运行出错" in failed and "PLAYTEST_BROWSER=disabled" in failed and "本局结论" not in failed,
@@ -317,8 +332,8 @@ def main() -> int:
                 try:
                     normal = os.environ["PLAYTEST_PUBLIC_URL"]
                     for visit in (1, 2):
-                        page, _, _ = open_cold_page(browser, normal, f"public-normal-{visit}")
-                        text = body_text(page)
+                        page, scope, _, _ = open_cold_page(browser, normal, f"public-normal-{visit}")
+                        text = body_text(scope)
                         missing = [needle for needle in needles if needle not in text]
                         check(f"公开 URL 第 {visit} 次冷启动首屏台账完整", not missing, "缺：" + repr(missing))
                         page.close()
