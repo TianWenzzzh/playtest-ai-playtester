@@ -33,7 +33,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from playtest.agent import run_episode, sweep, verify_pack
 from playtest.env import BrowserEnv, shutdown_browser
-from playtest.offline import OfflineMirror, capture, summarize
+from playtest.offline import OfflineMirror, capture, harvest_episodes, summarize, top_up
 from playtest.policies import CuriosityPolicy, RandomPolicy
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -198,24 +198,49 @@ def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
         info = capture(REAL_URL, REAL_HAR, warm=_click_walk)
         print(f"   取包：{info['entries']} 条 / {info['bytes']} B / 线上 {info['wire_bytes']} B "
               f"/ 补声明 {info['declared_prefetched']} 条")
-    mirror = OfflineMirror(REAL_HAR)
-    print(f"   镜像 GET 条目：{len(mirror.index)}")
 
     seed = 20261105
-    a = walk(REAL_URL, seed, 12, offline=mirror)
-    check("探针在离线镜像里可用", a["mode"] != "unstarted", f"mode={a['mode']}")
-    b = walk(REAL_URL, seed, 12, offline=mirror)
-    rep = mirror.report()
-    # 未命中分两类，判据不一样：代码字节缺了 ⇒ 这个包根本不算那个游戏，读数作废；
-    # 装饰字节（深层关卡的美术）缺了 ⇒ 两次跑都同样地缺，确定性不受影响，如实报数。
-    def _misses(w: dict[str, Any]) -> list[str]:
-        return sorted(x for x in w["asset_errors"] if x.startswith("mirror_miss"))
+    seeds = [seed, seed + 1]
+    origin = "/".join(REAL_URL.split("/")[:3])
 
-    misses_a, misses_b = _misses(a), _misses(b)
-    code_miss = [m for m in misses_a if re.search(r"\.(js|mjs|css)([?#]|$)", m)]
+    def measure() -> dict[str, Any]:
+        mirror = OfflineMirror(REAL_HAR)
+        print(f"   镜像 GET 条目：{len(mirror.index)}")
+        a = walk(REAL_URL, seed, 12, offline=mirror)
+        b = walk(REAL_URL, seed, 12, offline=mirror)
+        rows = sweep(REAL_URL, seeds, lambda s: CuriosityPolicy(s), OUT / "real-packs",
+                     max_steps=40, offline=mirror)["episodes"]
+        late = mirror.report()
+        code_miss = [m for m in late["miss_examples"]
+                     if re.search(r"\.(js|mjs|css)([?#]|$)", m)]
+        return {"mirror": mirror, "a": a, "b": b, "rows": rows,
+                "late": late, "code_miss": code_miss}
+
+    # 首屏热身不等于完整覆盖面。若探索发现懒加载代码未命中，先补包、让真实 episode
+    # 把深层字节请求出来，再重新量；否则"离线复现失败"会被误归因给应用异步。
+    rebuilt_rounds = 0
+    for _round in range(3):
+        m = measure()
+        if not m["code_miss"]:
+            break
+        print(f"   代码字节未命中 {len(m['code_miss'])} 条 ⇒ 补包并重测（第 {rebuilt_rounds + 1} 轮）")
+        top_up(REAL_URL, REAL_HAR, host=origin)
+        harvest_episodes(REAL_URL, REAL_HAR, seeds=seeds, max_steps=40)
+        rebuilt_rounds += 1
+    else:
+        print("   三轮补包后仍有代码未命中，下面会如实判红")
+
+    mirror, a, b = m["mirror"], m["a"], m["b"]
+    rep = m["late"]
+    rows = m["rows"]
+
+    check("探针在离线镜像里可用", a["mode"] != "unstarted", f"mode={a['mode']}")
+    code_miss = m["code_miss"]
     check("未命中里没有代码字节", not code_miss, code_miss[:3])
+    misses_a = sorted(x for x in a["asset_errors"] if x.startswith("mirror_miss"))
+    misses_b = sorted(x for x in b["asset_errors"] if x.startswith("mirror_miss"))
     check("两次离线跑的未命中集合一致", misses_a == misses_b,
-          f"{len(misses_a)} 条：{[m.split(':')[-1].split('/')[-1][:28] for m in misses_a[:4]]}")
+          f"{len(misses_a)} 条：{[x.split(':')[-1].split('/')[-1][:28] for x in misses_a[:4]]}")
     same = a["hashes"] == b["hashes"]
     check("离线两次同种子逐帧全等", same,
           f"{len(a['hashes'])} 帧 / 分歧在第 "
@@ -223,38 +248,27 @@ def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
     print(f"   served={rep['served']} 分档 {rep['served_by']} / 未命中 {rep['miss_calls']} "
           f"/ 导航后重新解析 frame {a['relinks']}+{b['relinks']} 次")
     if not same:
-        # 与 06 §8.3 的远端读数同一套诚实处理：等级要自己降格，别等别人发现
         n = min(len(a["hashes"]), len(b["hashes"]))
         first = next((i for i in range(n) if a["hashes"][i] != b["hashes"][i]), None)
         print(f"   ⚠️ 离线仍会漂（首处分歧 frame={first}）⇒ 异步依赖不止网络一层，"
               f"React 调度/动画本身也在贡献非确定性。这条要如实进台账。")
 
-    # 离线发现腿：M1.5 的原判据是"真实第三方作品上产出一个 replayed=true 的复现包"。
-    # 远端那份只能到 async_dependent（06 §8.3）；同一个应用离线跑，两腿才有机会同时绿。
-    seeds = [seed, seed + 1]
-    rows = sweep(REAL_URL, seeds, lambda s: CuriosityPolicy(s), OUT / "real-packs",
-                 max_steps=40, offline=mirror)["episodes"]
     fire = [r for r in rows if r["defect"]]
     for r in rows:
         print(f"   seed {r['seed']}: steps={r['steps']} states={r['distinct_states']} "
               f"defect={r['defect'] and r['defect']['kind']} replayed={r['replayed']} "
               f"err={r['error']}")
     check("真实作品离线扫描有开火", bool(fire),
-          [(r["seed"], r["defect"]["kind"]) for r in fire] or "三个种子都没抓到缺陷")
+          [(r["seed"], r["defect"]["kind"]) for r in fire] or "种子都没抓到缺陷")
     check("开火的包在离线环境里 replayed=true", bool(fire) and all(r["replayed"] for r in fire),
           [(r["seed"], r["replayed"]) for r in fire])
-
-    late = mirror.report()
-    late_code = [m for m in late["miss_examples"] if re.search(r"\.(js|mjs|css)([?#]|$)", m)]
-    print(f"   最终 served={late['served']} 分档 {late['served_by']} "
-          f"未命中 {late['miss_calls']}（去重 {late['distinct_misses']}）")
-    check("深度探索后仍未命中代码字节", not late_code, late_code[:3])
-    out = {"mirror": late, "bit_equal": same,
-           "frames": len(a["hashes"]), "misses": sorted(
-               {m.split(":", 1)[1] for m in mirror.misses})[:20],
-           "episodes": [{k: r[k] for k in ("seed", "steps", "distinct_states", "defect",
-                                           "pack_id", "replayed", "error")} for r in rows]}
-    return out
+    check("深度探索后仍未命中代码字节", not code_miss, code_miss[:3])
+    print(f"   自重建补包：{rebuilt_rounds} 轮")
+    return {"mirror": rep, "bit_equal": same, "rebuilt_rounds": rebuilt_rounds,
+            "frames": len(a["hashes"]), "misses": sorted(
+                {x.split(":", 1)[1] for x in mirror.misses})[:20],
+            "episodes": [{k: r[k] for k in ("seed", "steps", "distinct_states", "defect",
+                                            "pack_id", "replayed", "error")} for r in rows]}
 
 
 def main() -> int:

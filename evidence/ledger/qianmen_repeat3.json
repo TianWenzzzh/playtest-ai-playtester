@@ -1,0 +1,111 @@
+{
+  "schema": "playtest-offline-evidence/2",
+  "game": {
+    "id": "qianmen-ai-liar",
+    "title": "千门 · AI 千王擂台",
+    "source_url": "https://zhijiejj-qianmen-ai-liar.ms.show/"
+  },
+  "scope": "public_client_only_offline_replay",
+  "offline_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d",
+  "repetitions_requested": 3,
+  "recorded_at": "2026-11-06T20:22:32+0800",
+  "episodes": [
+    {
+      "seed": 20261105,
+      "pack_id": "d3905699adb62460",
+      "pack_sha256": "67fdfdac2b729781fe81e0d5cb737f11f38df0b91e94154334e2e60b34c2930c",
+      "steps": 3,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:button:气泡语音：开@b282a1262875",
+      "runs": [
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2647
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2595
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2642
+        }
+      ],
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "level": "bit_reproducible"
+    },
+    {
+      "seed": 20261106,
+      "pack_id": "733c63124471c605",
+      "pack_sha256": "c8136cf9ce3ac41f37f0f5189a632d6e39ef84279e915cce3c24c8997b461468",
+      "steps": 2,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:button:气泡语音：开@6c4b9bf90550",
+      "runs": [
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 2,
+          "steps_total": 2,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2563
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 2,
+          "steps_total": 2,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2560
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 2,
+          "steps_total": 2,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2570
+        }
+      ],
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "level": "bit_reproducible"
+    }
+  ],
+  "field_caliber": {
+    "pack_id": "稳定身份：digest(url, seed, 动作字符串序列, defect.signature) 前 16 位（playtest/trace.py）；不含 actions[].hash_after/frame 期望时间线 ⇒ 同 pack_id ≠ 同字节。",
+    "pack_sha256": "记录时刻整份包文件的快照哈希：包内含 evidence.recorded_at 墙钟与录制侧 verification，每次重生成必漂；指向 gitignored out/ 件，公开 clone 拿不到 ⇒ 不是可复核绑定，仅作本地快照留痕。",
+    "offline_har_sha256": "可复核的输入绑定：重放实际喂的 HAR 字节哈希；台账 replays[].input_har_sha256 与它对账。"
+  }
+}

@@ -244,6 +244,8 @@ class LLMPolicy:
         self._state_notes: dict[str, str] = {}
         self.llm_hits = 0
         self.llm_misses = 0
+        self.fallbacks = 0
+        self.cap_skipped = 0
         self.max_decisions = max_decisions
 
     def _compact(self, data: Any) -> str:
@@ -253,6 +255,10 @@ class LLMPolicy:
     def choose(self, actions, snap, seen, history):
         if not actions:
             return "wait"
+
+        if self.client.cfg.available() and len(self.decisions) >= self.max_decisions:
+            # 预算用完之后每一步都只由 curiosity 决定 —— 这种静默兜底必须能被数出来。
+            self.cap_skipped += 1
 
         if self.client.cfg.available() and len(self.decisions) < self.max_decisions:
             payload = {
@@ -289,6 +295,7 @@ class LLMPolicy:
             })
 
         pick = self._fallback.choose(actions, snap, seen, history)
+        self.fallbacks += 1
         self.decisions.append({
             "i": len(self.decisions), "action": pick,
             "reason": self.client.stat.last_error or "回退到 curiosity", "source": "fallback",
@@ -298,12 +305,29 @@ class LLMPolicy:
     def note_dead_end(self, state_hash: str, kind: str) -> None:
         self.dead_ends.append(f"{kind}@{state_hash[-12:]}")
 
+    def _degradation(self) -> str:
+        """整局降级归因，由计数派生，不由散文判断。
+
+        顺序即判据：端点不在时后面的计数都没意义，所以它先看。
+        """
+        if self.client.cfg.available() is False:
+            return "endpoint_unavailable"
+        if self.llm_misses:
+            return "invalid_action"
+        if self.cap_skipped:
+            return "decision_cap"
+        return "none"
+
     def trace(self) -> dict[str, Any]:
         return {
             "llm_available": self.client.cfg.available(),
             "model": self.client.cfg.model,
             "llm_hits": self.llm_hits,
             "llm_misses": self.llm_misses,
+            "fallbacks": self.fallbacks,
+            "cap_skipped": self.cap_skipped,
+            "decision_count": self.llm_hits + self.fallbacks,
+            "degradation": self._degradation(),
             "calls": self.client.stat.as_dict(),
             "decisions": self.decisions[-40:],
             "note": (

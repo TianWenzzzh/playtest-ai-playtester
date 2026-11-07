@@ -15,8 +15,10 @@
 
 ⚠️ 但别把这句话当天花板用。实测：真实第三方作品上曾经停在 `async_dependent` 的包，
 在**取包离线之后**并没有立刻变绿——原因是回放路径和录制路径不一致（第 6 节）。
-对齐之后 23 步那枚 `replayed=true`（23/23，重放三次逐值一致）；26 步那枚仍红 ——
-同一份包连重放三次得 20/26 → 20/26 → 21/26，**分歧点自己会移动**，所以它留在 `async_dependent`。
+对齐之后曾取得单次 `replayed=true`（23/23）；🔴 但后来在同一份输入 HAR 上各重放三遍，
+23 步那枚第一遍在第 18 步分叉 ⇒ 它现在记 `async_dependent`（当前 6 枚读数见
+`evidence/corpus.json` 与 §5.5）。26 步那枚属 11-05 旧快照，20/26 → 20/26 → 21/26
+**分歧点自己会移动**，跨快照包身份不同，只作历史。
 "复现不出来"先怀疑仪器，再宣称原理。
 
 ## 2. 处置：`capture` 把整站响应录成一个 `.har`
@@ -80,8 +82,23 @@ playtest capture https://someone.ms.show/ --har someone.har --top-up
   所以"连续两次读数相同"这个静息条件几乎必然在解码还没落地的那一瞬间成立。
   现在的静息条件是三条同时成立：**两次哈希相同 · 没有在途图片解码 · 资源条目数不再增长**，
   并且只在真有在途工作时才睡一小段真实时间（`settle_poll_ms`，夹具零成本）。
-  改后读数：真实作品两枚包各连重放三遍都 `bit_reproducible`、`mismatch=null`，
-  且同一 seed 连录两遍的动作序列逐值一致（`tests/m3_offline.py` 16/16）。
+  改后读数（**绑输入快照**，跨快照不可互借）：11-05 那份快照的两枚包各连重放三遍都
+  `bit_reproducible`、`mismatch=null`，且同一 seed 连录两遍的动作序列逐值一致
+  （`tests/m3_offline.py` 16/16）。🔴 11-06 换了一份 HAR 重取后，`tools/replay_repeat.py`
+  把台账引用的 6 枚包各重放三遍：**5 枚逐值一致，牛马地下城 23 步那枚
+  （`ef6b22c199b40365`）第一遍在第 18 步 `click:button:开始冒险` 分叉 ⇒ 如实降格
+  `async_dependent`** —— 这条是**未闭合的能力缺口**，不是已经解决。
+  🔴 **归因未闭合，别把"解码漏进指纹"当结论**：三遍的 `wall_ms`（3790 / 3865 / 3604）
+  与是否分叉不相关，所以它只是假设之一；另一条更便宜的假设是 `replay()` 的存档注入分支
+  （`playtest/trace.py:95` 用"装回存档后哈希变没变"决定要不要 `reboot`，而 `storage_injected`
+  这个字段被 `tools/replay_repeat.py` 投影时丢掉了、至今没进 ledger）。
+  先做字段级诊断再谈改判据，详见 `README.md` 第 7 条。逐遍读数 `evidence/ledger/*_repeat3.json`，
+  校验 `PYTHONUTF8=1 python tools/corpus.py`。
+  🔴 **三个身份字段别混读**（ledger 自带 `field_caliber` 块，`tools/corpus.py` 会守它）：
+  `pack_id` 是稳定身份（url/seed/动作字符串/defect.signature），**不含** `actions[].hash_after/frame`
+  期望时间线 ⇒ 同 `pack_id` ≠ 同字节；`pack_sha256` 是整份包文件的快照哈希（含 `recorded_at` 墙钟），
+  每次重生成必漂、且指向 gitignored `out/` 件，**不是可复核绑定**；可复核的输入绑定是
+  `offline_har_sha256`（重放实际喂的 HAR 字节，台账 `input_har_sha256` 与它对账）。
   用完预算仍不安息时不假装安静 —— `Snapshot.assets.settle_unsettled` 如实带上。
 
 ## 5.5 复现不出来时先查的两条（都是真实踩过的坑）

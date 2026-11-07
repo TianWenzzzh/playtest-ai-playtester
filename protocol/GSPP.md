@@ -1,6 +1,6 @@
 # GSPP · Game State Probe Protocol (v0.1)
 
-让**任意 HTML5 游戏**在**不被重写**的前提下，变成可被 Agent 读取、可被 Agent 下发动作、
+让**实现了本契约的 HTML5 游戏**在**不被重写**的前提下，变成可被 Agent 读取、可被 Agent 下发动作、
 且**可被逐帧确定性重放**的环境。
 
 ## 0. 设计立场
@@ -91,7 +91,10 @@ window.__GSPP__.register({
 });
 ```
 
-**接入成本目标：中位数 20 行。** `read/apply/actions` 三个函数是全部必需项。
+**接入成本已实测，不是目标值**：注册块 11–48 行（中位数 29），非空非注释 11–44 行（中位数 23）。
+口径 = 从 `register({` 那行到第一个整行 `});`，含首尾；现读 `python tools/adapter_linecount.py`。
+🔴 旧稿这里写「中位数 20 行」——**那个数从没量过**，"中位数"三个字不构成测量。
+`read/apply/actions` 三个函数是全部必需项。
 
 ---
 
@@ -213,5 +216,5 @@ env.close()
 | **Ludra**（MIT） | 自有引擎内：JSON 场景、位级确定、`fuzz` 报 softlock/unwinnable 并附复现输入 | 🔴**要求"在我的引擎里做游戏"**；不接既有 HTML5 游戏；无 LLM 语义策略；无"发现→打补丁→回放验证"闭环 |
 | **canvas 视觉 bug 研究**（arXiv 2208.02335 / 2501.09236） | 指出 canvas 内容不进 DOM 导致现有 web 测试工具失效 | 只做视觉异常检测，**不产出可重放的动作序列** |
 
-⇒ GSPP 的位置：**把 Gymnasium 的 `reset(seed)/step` 契约搬到浏览器里任意既有 HTML5 游戏上，
+⇒ GSPP 的位置：**把 Gymnasium 的 `reset(seed)/step` 契约搬到浏览器里的 HTML5 游戏上（凡实现本契约者），
 用注入垫片而非引擎改造来换取确定性**。这是 Web 侧的空白（Web 游戏目前只有输入标准，没有状态导出标准）。

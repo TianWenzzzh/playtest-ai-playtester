@@ -167,9 +167,10 @@ def _classify(env: BrowserEnv, replayed: bool, initial_ok: bool, persistent: Any
         "storage_captured": storage_present,
         "not_caused_by": "离线包覆盖不全 —— 未命中为 0、命中全在 exact 档时才会走到这一级",
         "first_check": "先确认录制与回放走的是同一条路径（观测不得推进录制实例的时钟、"
-                       "回放要按包里记录的帧时间线补齐）——这两处修好后，"
-                       "真实第三方作品 23 步那枚三次重放都 23/23 全等并升到 bit_reproducible；"
-                       "26 步那枚仍留在这一级 —— 同一份包重放三次 20/26→20/26→21/26，分歧点会移动",
+                       "回放要按包里记录的帧时间线补齐）—— 这两处修好后曾取得单次 23/23；"
+                       "但同一份输入 HAR 上各重放三遍时，牛马地下城 23 步那枚第一遍在第 18 步分叉，"
+                       "它现在如实留在 async_dependent。当前 6 枚的逐遍读数见 evidence/corpus.json "
+                       "与 evidence/ledger/*_repeat3.json；26 步那枚属 11-05 旧快照，只作历史",
         "mitigation": "要拿到 bit_reproducible：游戏侧注册 GSPP adapter 并提供 snapshot/restore，"
                       "或把页面与资源取到本地离线跑（capture --har）",
     }

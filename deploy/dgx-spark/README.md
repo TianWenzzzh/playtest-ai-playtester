@@ -137,14 +137,14 @@ DGX Spark（arm64, GB10）
 | 基座模型 | 无端点 ⇒ LLM 臂实际等价 `curiosity`（表里已如实标注） | 主循环 MoE 小激活 + 重推理档 | 见 §2 选型论证 |
 | 出词速度 | — | `___ tok/s` | 🔴 **未测**：`bench.py --rounds`（需端点）；官方教程口径 35B-A3B ≈110 tok/s 是**别人机器**的数 |
 | 端到端耗时（单局试玩） | **中位 3.55 s / 均值 4.26 s / p95 11.2 s / 最大 14.3 s**（144 局） | `___` | `out/benchmark.json` 的 `wall_ms` 逐局求；144 局局内计时合计 613 s |
-| 整轮基准墙钟 | **12 分 09 秒**（09:46:54 → 09:58:58，144 局 + 54 次复现校验） | `___` | `raw/N_bench.log` 起止 mtime |
+| 整轮基准墙钟 | **12 分 09 秒**（11-06 上午那次独立跑批：09:46:54 → 09:58:58，144 局 + 54 次复现校验；起止取自开发工作区日志 mtime，**该日志不随仓库分发**） | `___` | 仓内复算：跑 `PYTHONUTF8=1 python tools/certify.py full`，读 `evidence/latest.json` 里 `benchmark.run` 那一步的 `duration_ms`。🔴 那是**另一次跑批**的数，与左格不可互借（认证器逐步记 `started_at`/`duration_ms`，所以这个量现在仓内可复算） |
 | 内存峰值（空载 / 单局 / 并发 2 路） | 未测 | `___ / ___ / ___ GB` | `bench.py` 的 `mem_snapshot()` 走 `/proc/meminfo`（**不是** nvidia-smi，GB10 统一内存没有独立显存） |
 | 并发能力 | **1**（设计值，不是测值：2 vCPU 档同时开两个 Chromium 会互相拖到超时） | `___` | 需要真节点才能测出实际上限 |
-| 稳定性 | 🔴 **144 局 error = 0**；五套套件 `m0 27 / m1 10 / m2 18 / 镜像语义 21` rc=0；`m3_offline 15/16`（红的是真实作品 26 步包的位级复现，**没放宽期望**） | 连续 10 次生成 / 24 h 挂机 | 24 h 挂机 **未测** |
+| 稳定性 | 🔴 **144 局 error = 0**；各套件断言数与逐条 RC **以运行输出为准，这里不抄**（现读 `evidence/latest.json` 的 `steps[].rc` 与 `evidence/runs/<run>/*.log`，由 `tools/certify.py` 生成） | 连续 10 次生成 / 24 h 挂机 | 24 h 挂机 **未测** |
 | 启动时间（冷 / 热） | 未测 | `___ / ___ s` | 冷启动含模型加载 ⇒ 需端点 |
 | 资源回收 | 已实现：浏览器实例进程内共享、`shutdown_browser()` + `atexit`、崩溃后 `is_connected()` 判死重建 | 模型按需加载/卸载 + 日志滚动 | 🔴 模型侧卸载**未实现**（我们没有常驻模型） |
 | **离线能力** | ✅ **已实测**：真实第三方作品取成 `.har` 后零回源跑通 —— 未命中 **0**、命中 **561 全在 exact 档**、全程不消耗作者额度 | 断网完成生成与验证 | `playtest.cli capture` + `--har`；判据在 `tests/m3_offline.py` |
-| 复现等级（本工具自己的指标） | `bit_reproducible` 成立一枚（23 步包三次重放 23/23），另一枚如实降格 `async_dependent`（26 步包 20/26→20/26→21/26，分歧点会移动） | 同 | `raw/audit/replay_detail.log` |
+| 复现等级（本工具自己的指标） | 🔴 **不是每枚都位级复现**：牛马地下城 23 步那枚在同一份输入 HAR 上重放三遍，第一遍在第 18 步（场景切换）分叉 ⇒ 如实记 `async_dependent`；其余各枚三遍逐值一致。逐枚等级与计数**现读台账，不在此抄** | 同 | `evidence/corpus.json` + `evidence/ledger/*_repeat3.json`（`tools/corpus.py` 现校验） |
 | 渲染后端 | 🔴 **SwiftShader 软件渲染**：`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)` | 现读同一字段 | `window.__GSPP__.render()`；**这条决定 WebGL 类指纹能不能跨机背书**，拿到节点第一件事就是读它 |
 
 **为什么"离线能力"这一行值得单独摆出来**：如果核心推理全走云端 API，这台机器就是多余的。

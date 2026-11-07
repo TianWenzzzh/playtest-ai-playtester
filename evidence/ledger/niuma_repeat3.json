@@ -1,0 +1,116 @@
+{
+  "schema": "playtest-offline-evidence/2",
+  "game": {
+    "id": "niuma-dungeon",
+    "title": "牛马地下城",
+    "source_url": "https://weirdfish-niuma-dungeon.ms.show/"
+  },
+  "scope": "public_client_only_offline_replay",
+  "offline_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2",
+  "repetitions_requested": 3,
+  "recorded_at": "2026-11-06T20:23:13+0800",
+  "episodes": [
+    {
+      "seed": 20261105,
+      "pack_id": "a668e81678650103",
+      "pack_sha256": "3bbf648775b3a75fcdb0db83301c9ee97819135d9699e63f89840c73ed86e6f6",
+      "steps": 20,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93",
+      "runs": [
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 20,
+          "steps_total": 20,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3925
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 20,
+          "steps_total": 20,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3656
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 20,
+          "steps_total": 20,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3636
+        }
+      ],
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "level": "bit_reproducible"
+    },
+    {
+      "seed": 20261106,
+      "pack_id": "ef6b22c199b40365",
+      "pack_sha256": "5bb9dcf519da21821282dab234b43d648cfddcbf87cf666042570b8261d0d7d5",
+      "steps": 23,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754",
+      "runs": [
+        {
+          "rc": 1,
+          "replayed": false,
+          "initial_hash_matched": true,
+          "steps_matched": 18,
+          "steps_total": 23,
+          "hashes_match": false,
+          "mismatch": {
+            "i": 18,
+            "action": "click:button:开始冒险",
+            "expected": "sha256:a81bdf8c67dac50c3c386a0558ca84abb2b033f8b0cf2939fabf3aa552eb1ead",
+            "actual": "sha256:d4dc5115ed54d8214c04e21401de1b7ef62b2c21f0d85a9b495a11362c396ab1"
+          },
+          "stderr_tail": "复现包无效：存在哈希不一致，见 mismatch",
+          "wall_ms": 3790
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 23,
+          "steps_total": 23,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3865
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 23,
+          "steps_total": 23,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3604
+        }
+      ],
+      "all_runs_replayed": false,
+      "per_run_readings_identical": false,
+      "level": "async_dependent"
+    }
+  ],
+  "field_caliber": {
+    "pack_id": "稳定身份：digest(url, seed, 动作字符串序列, defect.signature) 前 16 位（playtest/trace.py）；不含 actions[].hash_after/frame 期望时间线 ⇒ 同 pack_id ≠ 同字节。",
+    "pack_sha256": "记录时刻整份包文件的快照哈希：包内含 evidence.recorded_at 墙钟与录制侧 verification，每次重生成必漂；指向 gitignored out/ 件，公开 clone 拿不到 ⇒ 不是可复核绑定，仅作本地快照留痕。",
+    "offline_har_sha256": "可复核的输入绑定：重放实际喂的 HAR 字节哈希；台账 replays[].input_har_sha256 与它对账。"
+  }
+}
