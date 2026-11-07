@@ -105,6 +105,23 @@ def main() -> int:
         srv.shutdown()
         srv.server_close()
 
+    # 名册是无鉴权 GET https://api-inference.modelscope.cn/v1/models 的原始响应（2026-11-07 实抓，
+    # 浏览器 UA＋直连，零魔粒消耗）。旧默认 Qwen3-30B-A3B-Instruct-2507 已被端点下架 ⇒ 每次 complete()
+    # 回 HTTP 400 "Model id"，llm_hits 恒 0、决策表全是 llm_invalid+fallback 配对。这条判据钉住
+    # "默认必须是现役可用 ID"；名册会随版本变，过期时重抓夹具（不是放宽判据）。
+    print("== 4. 默认模型必须是魔搭 API Inference 现役名册里的 ID ==")
+    fixture = pathlib.Path(__file__).resolve().parent / "fixtures" / "modelscope_models_20261107.json"
+    roster = {m["id"] for m in json.loads(fixture.read_text(encoding="utf-8"))["data"]}
+    check("名册非空（防夹具被掏空后 membership 判据永真）", len(roster) >= 1, f"n={len(roster)}")
+    saved = os.environ.pop("PLAYTEST_MODEL", None)
+    try:
+        default_model = LLMConfig.from_env().model
+    finally:
+        if saved is not None:
+            os.environ["PLAYTEST_MODEL"] = saved
+    check("默认模型在现役名册内", default_model in roster,
+          f"default={default_model!r} roster_size={len(roster)}")
+
     print()
     if fails:
         print("M8 模型客户端未通过:", len(fails), "项 ->", "; ".join(fails))

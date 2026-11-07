@@ -38,10 +38,11 @@ class LLMConfig:
         base = os.environ.get("PLAYTEST_BASE_URL", "")
         if not base and key and not os.environ.get("PLAYTEST_API_KEY"):
             base = MODELSCOPE_BASE
+        # 默认须是魔搭 API Inference 现役 ID；Spark 本地 serving 另设 PLAYTEST_MODEL，不用此默认。
         return cls(
             base_url=base.rstrip("/"),
             api_key=key,
-            model=os.environ.get("PLAYTEST_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507"),
+            model=os.environ.get("PLAYTEST_MODEL", "Qwen/Qwen3.5-35B-A3B"),
             temperature=float(os.environ.get("PLAYTEST_TEMP", "0.2")),
             max_tokens=int(os.environ.get("PLAYTEST_MAX_TOKENS", "400")),
         )
