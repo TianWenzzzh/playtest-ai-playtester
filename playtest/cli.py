@@ -75,7 +75,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         m = mirror.report()
         print(f"离线镜像：命中 {m['served']}（{m['served_by']}）· 未命中 {m['miss_calls']}",
               file=sys.stderr)
-    return 0 if not args.fail_on_defect else (1 if hits else 0)
+    errors = any(e.get("error") for e in report["episodes"])
+    return 1 if errors or (args.fail_on_defect and hits) else 0
 
 
 def cmd_replay(args: argparse.Namespace) -> int:

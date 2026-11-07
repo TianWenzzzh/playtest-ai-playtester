@@ -110,6 +110,44 @@ if res.defect:
     p = save_pack(res.pack, OUT / f"m0-{pack_id(res.pack)}.json")
     print("     落盘:", p)
 
+print("== 5b. 包身份：pack_id 必须绑住输入，且两次独立录制给出同一枚 ==")
+# 台账与对外措辞里「同一枚包 ef6b22c199b40365」这句话的身份锚就是 pack_id，
+# 它由 (url, seed, 动作序列, 缺陷签名) 四项派生（playtest/trace.py:188）。
+# 不钉住这一层，「同一枚包」就只是一句语气；不逐个试它绑了谁，
+# 就不知道改哪一样东西会让它换名字。
+_rec1 = run_episode(GAME, SEED, CuriosityPolicy(SEED), max_steps=40)
+_rec2 = run_episode(GAME, SEED, CuriosityPolicy(SEED), max_steps=40)
+id_base = pack_id(_rec1.pack)
+check("同一 (url, seed, 策略) 两次独立录制 → pack_id 逐字相同",
+      id_base == pack_id(_rec2.pack),
+      f"{id_base} vs {pack_id(_rec2.pack)} · steps={_rec1.steps}/{_rec2.steps}")
+
+
+def _mutate(pack, path, value):
+    """按 JSON 往返一份再改一处 —— 与磁盘上的包同一形状，不碰原对象。"""
+    d = json.loads(json.dumps(pack, ensure_ascii=False))
+    node = d
+    for k in path[:-1]:
+        node = node[k]
+    node[path[-1]] = value
+    return d
+
+
+BINDINGS = {
+    "url": (("game", "url"), lambda p: p["game"]["url"] + "#v2"),
+    "seed": (("initial_state", "seed"), lambda p: p["initial_state"]["seed"] + 1),
+    "动作序列": (("actions", 0, "action"), lambda p: "wait"),
+    "缺陷签名": (("defect", "signature"), lambda p: p["defect"]["signature"] + "|x"),
+}
+for name, (path, make) in BINDINGS.items():
+    changed = pack_id(_mutate(_rec1.pack, path, make(_rec1.pack)))
+    check(f"改 {name} → pack_id 必须变", changed != id_base,
+          f"{id_base} vs {changed}")
+
+drifted = pack_id(_mutate(_rec1.pack, ("evidence", "recorded_at"),
+                          lambda p: "2000-01-01T00:00:00"))
+check("改录制时间戳 → pack_id 不变（身份不随墙钟漂移）", drifted == id_base, drifted)
+
 print("== 6. 正对照：把间隙上限收到可跳距离以内，工具必须保持沉默 ==")
 SAFE = GAME + "?maxgap=3"
 false_pos = 0
@@ -143,6 +181,95 @@ if not llm.client.cfg.available():
 else:
     check("LLM 臂真的走通了模型调用", rl.policy_trace.get("llm_hits", 0) > 0,
           json.dumps(rl.policy_trace.get("calls", {}), ensure_ascii=False))
+
+print("== 8b. LLM 记账：整局计数与三态降级由数出来的字段说话 ==")
+# 桩只回答"模型说什么"，合法/非法/没有端点三条路径都走真实的 LLMPolicy.choose，
+# 于是这里量的是记账本身，不是桩的姿态。
+class _FakeCfg:
+    def __init__(self, available):
+        self.model = "fake-model"
+        self._available = available
+
+    def available(self):
+        return self._available
+
+    def reason_unavailable(self):
+        return "本机没有端点（夹具）"
+
+
+class _FakeStat:
+    def __init__(self):
+        self.calls = 0
+        self.failures = 0
+        self.last_error = None
+
+    def as_dict(self):
+        return {"calls": self.calls, "failures": self.failures}
+
+
+class _FakeClient:
+    def __init__(self, reply, available=True):
+        self.cfg = _FakeCfg(available)
+        self.stat = _FakeStat()
+        self.reply = reply
+
+    def complete(self, messages):
+        self.stat.calls += 1
+        return self.reply
+
+
+class _Snap:
+    data = {"score": 1}
+    hash = "sha256:" + "0" * 64
+
+
+def _drive(policy, n, actions):
+    illegal = []
+    for i in range(n):
+        picked = policy.choose(actions, _Snap(), {f"s{i}"}, [actions[0]] * i)
+        if picked not in actions:
+            illegal.append(picked)
+    trace = policy.trace()
+    trace["illegal_picks"] = illegal
+    return trace
+
+
+ACTS = ["jump", "wait"]
+FIELDS = ("degradation", "llm_hits", "llm_misses", "fallbacks", "decision_count")
+t_ok = _drive(LLMPolicy(SEED, client=_FakeClient('{"action": "jump", "reason": "前进"}')),
+              5, ACTS)
+check("合法命中：degradation=none、hits 与 decision_count 等于整局步数、零回退",
+      t_ok.get("degradation") == "none" and t_ok.get("llm_hits") == 5
+      and t_ok.get("fallbacks") == 0 and t_ok.get("decision_count") == 5
+      and not t_ok.get("illegal_picks"),
+      json.dumps({k: t_ok.get(k) for k in FIELDS}, ensure_ascii=False))
+
+t_bad = _drive(LLMPolicy(SEED, client=_FakeClient('{"action": "fly", "reason": "非法动作"}')),
+               4, ACTS)
+check("非法动作：degradation=invalid_action、misses 与回退都计满、非法动作没被执行",
+      t_bad.get("degradation") == "invalid_action" and t_bad.get("llm_misses") == 4
+      and t_bad.get("fallbacks") == 4 and t_bad.get("llm_hits") == 0
+      and not t_bad.get("illegal_picks"),
+      json.dumps({k: t_bad.get(k) for k in FIELDS}, ensure_ascii=False))
+
+t_off = _drive(LLMPolicy(SEED, client=_FakeClient("", available=False)), 3, ACTS)
+check("端点不在：degradation=endpoint_unavailable、零调用、整局都算回退",
+      t_off.get("degradation") == "endpoint_unavailable"
+      and t_off.get("fallbacks") == 3 and t_off.get("decision_count") == 3
+      and t_off.get("calls", {}).get("calls") == 0 and not t_off.get("illegal_picks"),
+      json.dumps({**{k: t_off.get(k) for k in FIELDS}, "calls": t_off.get("calls")},
+                 ensure_ascii=False))
+
+# 预算用完那一段：端点是好的、也真命中过，但超出 max_decisions 之后每一步都只由
+# curiosity 决定。这一档如果读成 degradation=none，就是在拿模型的名字报启发式的成绩。
+t_cap = _drive(LLMPolicy(SEED, client=_FakeClient('{"action": "jump", "reason": "前进"}'),
+                         max_decisions=2), 5, ACTS)
+check("预算用完：前 2 步算命中、后 3 步计入 cap_skipped、降级为 decision_cap",
+      t_cap.get("degradation") == "decision_cap" and t_cap.get("llm_hits") == 2
+      and t_cap.get("cap_skipped") == 3 and t_cap.get("fallbacks") == 3
+      and t_cap.get("decision_count") == 5 and not t_cap.get("illegal_picks"),
+      json.dumps({**{k: t_cap.get(k) for k in FIELDS}, "cap_skipped": t_cap.get("cap_skipped")},
+                 ensure_ascii=False))
 
 print("== 9. 渲染后端自证：软件渲染必须报警，且仪器不许改动被测游戏 ==")
 # 为什么这条值得进冒烟闸门：无头浏览器没有 GPU 直通时会**静默**退回 SwiftShader，

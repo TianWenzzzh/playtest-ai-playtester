@@ -142,6 +142,10 @@ def shared_browser(headless: bool = True):
     嵌套 sync_playwright().start() 会当场报 "inside the asyncio loop"。
     共享 browser、每个 env 只开自己的 context，既解开嵌套也省下每次重启的开销。
     """
+    import os
+
+    if os.environ.get("PLAYTEST_BROWSER") == "disabled":
+        raise RuntimeError("Chromium 已被 PLAYTEST_BROWSER=disabled 禁用")
     if _shared["browser"] is not None and not _shared["browser"].is_connected():
         # 崩掉的 Chromium 留在缓存里 = 之后每一次请求都必红，而且再也起不来。
         shutdown_browser()
@@ -482,9 +486,11 @@ class BrowserEnv:
         for rounds in range(1, self.settle_rounds + 1):
             # 🔴 为什么必须真的等一会儿：被接管的时钟只在**我们叫它走**的时候走，
             # "推进 16 帧"消耗的墙钟时间≈0，而图片解码是落在真实时间上的任务。
-            # 只按帧数判静息，等于在解码还没落地的那一瞬间读指纹 ——
-            # 实测真实作品那枚 26 步包就是这么在卡牌/卡组切换处翻面的
-            # （同一份包三次重放 20/26 → 20/26 → 21/26，分歧点自己移动）。
+            # 只按帧数判静息，等于在解码还没落地的那一瞬间读指纹。
+            # 历史读数：11-05 旧快照那枚 26 步包三次重放 20/26→20/26→21/26，分歧点自己移动。
+            # 🔴 当前仍未闭合的那一例（牛马 23 步包第 18 步场景切换）**归因未定**：
+            # 三遍 wall_ms 与是否分叉不相关，所以"解码漏进指纹"只是假设之一，
+            # 另一条是 replay() 的存档注入分支。先做字段级诊断，别拿这段注释当结论。
             # 规则：**没有在途工作时一步都不等**（四个夹具零成本），
             # 只有 undecoded>0 / 资源数在涨 / 哈希还在变 时才睡一小段真实时间再判。
             if rounds > 1 or pend.get("undecoded", 0) or res_seen != self._res_prev:

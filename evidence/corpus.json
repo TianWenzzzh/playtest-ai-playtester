@@ -1,0 +1,159 @@
+{
+  "schema": "playtest-corpus/1",
+  "scope": "local_operational_ledger",
+  "games": [
+    {
+      "id": "niuma-dungeon",
+      "title": "牛马地下城",
+      "source_url": "https://weirdfish-niuma-dungeon.ms.show/",
+      "author": {
+        "name": "weirdfish"
+      },
+      "ownership": "third_party",
+      "permissions": {
+        "exploration": "public_client_only",
+        "publish_report": "not_requested"
+      },
+      "defects": [
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93",
+          "evidence": "evidence/ledger/2026-11-06_m3_offline_fresh_summary.json",
+          "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
+        },
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754",
+          "evidence": "evidence/ledger/2026-11-06_m3_offline_fresh_summary.json",
+          "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
+        }
+      ],
+      "replays": [
+        {
+          "seed": 20261105,
+          "steps": 20,
+          "pack_id": "a668e81678650103",
+          "level": "bit_reproducible",
+          "evidence": "evidence/ledger/niuma_repeat3.json",
+          "evidence_sha256": "00f22953c539ace4238b77a97ab7a5bfcefd3c792265f5b1ae336234cc18a940",
+          "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2"
+        },
+        {
+          "seed": 20261106,
+          "steps": 23,
+          "pack_id": "ef6b22c199b40365",
+          "level": "async_dependent",
+          "evidence": "evidence/ledger/niuma_repeat3.json",
+          "evidence_sha256": "00f22953c539ace4238b77a97ab7a5bfcefd3c792265f5b1ae336234cc18a940",
+          "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2"
+        }
+      ],
+      "author_confirmation": {
+        "status": "not_requested",
+        "evidence": null
+      }
+    },
+    {
+      "id": "ycxxl",
+      "title": "优宠消消乐",
+      "source_url": "https://fshanfeng-ycxxl.ms.show/",
+      "author": {
+        "name": "fshanfeng"
+      },
+      "ownership": "third_party",
+      "permissions": {
+        "exploration": "public_client_only",
+        "publish_report": "not_requested"
+      },
+      "defects": [
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:🔨 3@f61a8ad49758",
+          "evidence": "evidence/ledger/2026-11-06_ycxxl_offline_summary.json",
+          "evidence_sha256": "423b3ac573b112cfa99d45c5e696bccba91db392d87ed861a4409c351bea0fbb"
+        },
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:音效开关@d358a97d4de5",
+          "evidence": "evidence/ledger/2026-11-06_ycxxl_offline_summary.json",
+          "evidence_sha256": "423b3ac573b112cfa99d45c5e696bccba91db392d87ed861a4409c351bea0fbb"
+        }
+      ],
+      "replays": [
+        {
+          "seed": 20261105,
+          "steps": 3,
+          "pack_id": "25dc2578c3197948",
+          "level": "bit_reproducible",
+          "evidence": "evidence/ledger/ycxxl_repeat3.json",
+          "evidence_sha256": "d02dccafe156b6fc86f765c0386e24b9d7af732fb5b1a3d3dcd2cee56a9c3cd2",
+          "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d"
+        },
+        {
+          "seed": 20261106,
+          "steps": 5,
+          "pack_id": "0aaf2d192c4051ad",
+          "level": "bit_reproducible",
+          "evidence": "evidence/ledger/ycxxl_repeat3.json",
+          "evidence_sha256": "d02dccafe156b6fc86f765c0386e24b9d7af732fb5b1a3d3dcd2cee56a9c3cd2",
+          "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d"
+        }
+      ],
+      "author_confirmation": {
+        "status": "not_requested",
+        "evidence": null
+      }
+    },
+    {
+      "id": "qianmen-ai-liar",
+      "title": "千门 · AI 千王擂台",
+      "source_url": "https://zhijiejj-qianmen-ai-liar.ms.show/",
+      "author": {
+        "name": "zhijiejj"
+      },
+      "ownership": "third_party",
+      "permissions": {
+        "exploration": "public_client_only",
+        "publish_report": "not_requested"
+      },
+      "defects": [
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:气泡语音：开@b282a1262875",
+          "evidence": "evidence/ledger/2026-11-06_qianmen_offline_summary.json",
+          "evidence_sha256": "dfa97e489e3108133c4bf79bcb88169ea640ddbba71c9c8ca6f66cca3c9dbd7a"
+        },
+        {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:气泡语音：开@6c4b9bf90550",
+          "evidence": "evidence/ledger/2026-11-06_qianmen_offline_summary.json",
+          "evidence_sha256": "dfa97e489e3108133c4bf79bcb88169ea640ddbba71c9c8ca6f66cca3c9dbd7a"
+        }
+      ],
+      "replays": [
+        {
+          "seed": 20261105,
+          "steps": 3,
+          "pack_id": "d3905699adb62460",
+          "level": "bit_reproducible",
+          "evidence": "evidence/ledger/qianmen_repeat3.json",
+          "evidence_sha256": "250209160c1fcdb63a338661449295fbb6c9b375e6ac3395a3125ea13962b4d5",
+          "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d"
+        },
+        {
+          "seed": 20261106,
+          "steps": 2,
+          "pack_id": "733c63124471c605",
+          "level": "bit_reproducible",
+          "evidence": "evidence/ledger/qianmen_repeat3.json",
+          "evidence_sha256": "250209160c1fcdb63a338661449295fbb6c9b375e6ac3395a3125ea13962b4d5",
+          "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d"
+        }
+      ],
+      "author_confirmation": {
+        "status": "not_requested",
+        "evidence": null
+      }
+    }
+  ]
+}

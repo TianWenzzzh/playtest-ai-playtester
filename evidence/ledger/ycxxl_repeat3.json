@@ -1,0 +1,111 @@
+{
+  "schema": "playtest-offline-evidence/2",
+  "game": {
+    "id": "ycxxl",
+    "title": "优宠消消乐",
+    "source_url": "https://fshanfeng-ycxxl.ms.show/"
+  },
+  "scope": "public_client_only_offline_replay",
+  "offline_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d",
+  "repetitions_requested": 3,
+  "recorded_at": "2026-11-06T20:22:50+0800",
+  "episodes": [
+    {
+      "seed": 20261105,
+      "pack_id": "25dc2578c3197948",
+      "pack_sha256": "84054a0f7b2646b3f88f9447b1ead2495f150382405a7852693f8b90657161fe",
+      "steps": 3,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:button:🔨 3@f61a8ad49758",
+      "runs": [
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3045
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2997
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 3,
+          "steps_total": 3,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 3043
+        }
+      ],
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "level": "bit_reproducible"
+    },
+    {
+      "seed": 20261106,
+      "pack_id": "0aaf2d192c4051ad",
+      "pack_sha256": "fc51a7c85427109f1dd5f2fdfc7f06c9307bb5ef390b4ffd7dbda4e65bb0a87b",
+      "steps": 5,
+      "defect_kind": "ui_dead_end",
+      "defect_signature": "deadend:click:button:音效开关@d358a97d4de5",
+      "runs": [
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 5,
+          "steps_total": 5,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2895
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 5,
+          "steps_total": 5,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2831
+        },
+        {
+          "rc": 0,
+          "replayed": true,
+          "initial_hash_matched": true,
+          "steps_matched": 5,
+          "steps_total": 5,
+          "hashes_match": true,
+          "mismatch": null,
+          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
+          "wall_ms": 2953
+        }
+      ],
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "level": "bit_reproducible"
+    }
+  ],
+  "field_caliber": {
+    "pack_id": "稳定身份：digest(url, seed, 动作字符串序列, defect.signature) 前 16 位（playtest/trace.py）；不含 actions[].hash_after/frame 期望时间线 ⇒ 同 pack_id ≠ 同字节。",
+    "pack_sha256": "记录时刻整份包文件的快照哈希：包内含 evidence.recorded_at 墙钟与录制侧 verification，每次重生成必漂；指向 gitignored out/ 件，公开 clone 拿不到 ⇒ 不是可复核绑定，仅作本地快照留痕。",
+    "offline_har_sha256": "可复核的输入绑定：重放实际喂的 HAR 字节哈希；台账 replays[].input_har_sha256 与它对账。"
+  }
+}

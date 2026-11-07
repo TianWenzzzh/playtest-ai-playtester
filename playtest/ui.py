@@ -124,6 +124,30 @@ def _llm_banner() -> str:
             "配上 `PLAYTEST_BASE_URL` / `PLAYTEST_API_KEY`（DGX Spark 上的 SGLang 或魔搭 API Inference）即为真 LLM 臂。")
 
 
+def _static_evidence() -> str:
+    path = ROOT / "evidence" / "corpus.json"
+    try:
+        corpus = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return ("### 本地封存证据（不是本次实时运行）\n\n"
+                f"⚠️ 封存台账不可读：`{type(exc).__name__}`。这里不伪造缺陷或复现读数。")
+    rows = []
+    for game in corpus.get("games") or []:
+        confirmation = (game.get("author_confirmation") or {}).get("status") or "not_requested"
+        levels = "、".join(sorted({r.get("level", "未分级") for r in game.get("replays") or []})) or "无"
+        rows.append(
+            f"| {game.get('title') or game.get('id')} | {len(game.get('defects') or [])} 条缺陷 | "
+            f"{len(game.get('replays') or [])} 条复现记录 | `{levels}` | 作者确认：`{confirmation}` |"
+        )
+    body = ("\n".join(rows) if rows else "| 暂无 | 0 条缺陷 | 0 条复现记录 | — | — |")
+    return (
+        "### 本地封存证据（不是本次实时运行）\n\n"
+        "以下来自 `evidence/corpus.json` 的封存台账；它证明对应留档，不代表公开验收或作者确认。\n\n"
+        "| 外部作品 | 已留档发现 | 已留档回放 | 复现等级 | 证据边界 |\n|---|---:|---:|---|---|\n"
+        + body
+    )
+
+
 def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, str, str, str | None]:
     if not _BROWSER_SLOT.acquire(timeout=90):
         return ("⏳ 前面还有任务在跑（2 vCPU 只允许一个浏览器），请稍后重试。", "", "", "", None)
@@ -257,6 +281,7 @@ def build() -> gr.Blocks:
             "**主路径只有三个按钮**：`开始试玩` → `一键复现` → `自动修复`。"
         )
         llm_banner = gr.Markdown(_llm_banner())
+        gr.Markdown(_static_evidence())
 
         with gr.Row():
             with gr.Column(scale=2):
@@ -312,7 +337,7 @@ def build() -> gr.Blocks:
         with gr.Tab("接入与限制"):
             gr.Markdown(
                 "## 接入：两种模式\n\n"
-                "**注册模式（约 20 行）** —— 高保真：\n"
+                "**注册模式（实测中位数 29 行）** —— 高保真：\n"
                 "```js\nwindow.__GSPP__.register({\n"
                 "  meta: { id: 'my-game', ticksPerAction: 6 },\n"
                 "  reset: () => newGame(),\n"
@@ -322,6 +347,8 @@ def build() -> gr.Blocks:
                 "  isOver: (s) => s.hp <= 0 || s.won, isWin: (s) => !!s.won,\n"
                 "  key: (s) => ({ level: s.level, hp: s.hp }),   // 状态等价投影\n"
                 "  snapshot: () => G.serialize(), restore: (st) => G.loadFrom(st)\n});\n```\n\n"
+                "注册块行数**已实测**：11–48 行（中位数 29），非空非注释 11–44 行；"
+                "现读 `python tools/adapter_linecount.py`（限定词不算测量，旧稿那句「约 20」已撤）。\n\n"
                 "**兜底模式（0 行）** —— 什么都没写的游戏自动降级："
                 "从可见文本、按钮 disabled 集合、输入框值、canvas 降采样像素指纹推断状态；"
                 "从可交互元素 + 常用键集推断动作。本仓库 `games/clicker-quest/` 一行协议都没接，"

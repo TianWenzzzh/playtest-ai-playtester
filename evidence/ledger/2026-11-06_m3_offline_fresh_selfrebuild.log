@@ -1,0 +1,36 @@
+
+== 1. 管线正对照：自有夹具走「录包 → 关源 → 离线重放」仍逐帧全等 ==
+  PASS  录制 har 非空  [1 条 / 9581 B]
+   （本地服务已关闭 —— 下面三次重放若有任何请求回源，就会落成 mirror_miss）
+  PASS  镜像确实在供字节  [served=2]
+  PASS  零回源（misses 必须为空）
+  PASS  两次独立离线重放逐帧全等  [15 帧，前 4 位 45ee77 7647aa 3f629e fa6106]
+  PASS  动作序列也一致  [jump jump jump wait jump wait]
+
+== 2. 负控：把文档的三条服务路径一起拆掉，加载必须当场失败 ==
+  PASS  forget 把三条路径一起拆干净  [删 1 条，派生档已重算]
+  PASS  断网后页面确实起不来（证明字节来自镜像而非网络）  [Error]
+
+== 3. 缺陷腿： planted 臂离线复现到 bit 级 ==
+  PASS  离线也能发现缺陷  [unwinnable]
+  PASS  离线复现包 replayed=true  [steps 8/8 ⇒ bit_reproducible]
+
+== 4. 真实第三方作品（牛马地下城，作者不是我们）离线跑 ==
+   取包：219 条 / 39247930 B / 线上 15460767 B / 补声明 21 条
+   镜像 GET 条目：180
+   代码字节未命中 7 条 ⇒ 补包并重测（第 1 轮）
+   镜像 GET 条目：231
+  PASS  探针在离线镜像里可用  [mode=dom-fallback]
+  PASS  未命中里没有代码字节
+  PASS  两次离线跑的未命中集合一致  [0 条：[]]
+  PASS  离线两次同种子逐帧全等  [13 帧 / 分歧在第 -1 帧]
+   served=484 分档 {'exact': 484, 'normalized': 0, 'root_doc': 0} / 未命中 0 / 导航后重新解析 frame 0+0 次
+   seed 20261105: steps=20 states=7 defect=ui_dead_end replayed=True err=None
+   seed 20261106: steps=23 states=10 defect=ui_dead_end replayed=True err=None
+  PASS  真实作品离线扫描有开火  [[(20261105, 'ui_dead_end'), (20261106, 'ui_dead_end')]]
+  PASS  开火的包在离线环境里 replayed=true  [[(20261105, True), (20261106, True)]]
+  PASS  深度探索后仍未命中代码字节
+   自重建补包：1 轮
+
+==============================================
+16/16 PASS

@@ -94,6 +94,28 @@ def run_one(game: str, query: str, policy_name: str, seed: int, client: LLMClien
     }
 
 
+DEGRADATION_ORDER = ("endpoint_unavailable", "invalid_action", "decision_cap", "none")
+DEGRADATION_GLOSS = {
+    "endpoint_unavailable": "端点未配置，本列实际等价 curiosity",
+    "invalid_action": "端点在，但模型给出的动作不在合法集合内，已按计数回退",
+    "decision_cap": "端点在，预算用完之后的步由 curiosity 决定",
+    "none": "端点在、零降级，模型确实拿到了决策权",
+}
+
+
+def _zero_hit_note(degradations: list[Any]) -> str:
+    """分辨力夹具零命中时的归因行：只报这一列自己读到的降级计数。
+
+    🔴 原先这里按策略名硬写"LLM 端点未配置"。端点真配上以后，同一句话会变成假话，
+    还把真因（非法动作／预算用完）盖掉 —— 归因必须跟着读数，不能跟着列名。
+    """
+    seen = [d for d in DEGRADATION_ORDER if d in set(degradations)]
+    if not seen:
+        return ""
+    parts = "；".join(f"{DEGRADATION_GLOSS[d]} · {list(degradations).count(d)} 局" for d in seen)
+    return f"（{parts}）"
+
+
 def main(argv: list[str] | None = None) -> int:
     client = LLMClient()
     if not client.cfg.available():
@@ -159,7 +181,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{fps}/{clean:>8} {ok_replay}/{all_replay:>8} "
               f"{(sum(steps)//len(steps)) if steps else 0:>8}")
         if planted_s and hits_s == 0:
-            tag = "（LLM 端点未配置，本列实际等价 curiosity）" if p in ("llm", "llm_memory") else ""
+            tag = _zero_hit_note([r["policy_trace"].get("degradation")
+                                  for r in rows if r["policy"] == p])
             open_findings.append(f"{p} 在分辨力夹具上 0/{planted_s}：走不到缺陷所在深度{tag}")
 
     # 声明也会过期，而且过期的方向是"把已经做到的说成没做到"——同样要抓。

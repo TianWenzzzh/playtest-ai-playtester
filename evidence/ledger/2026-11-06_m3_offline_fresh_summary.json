@@ -1,0 +1,90 @@
+{
+  "fixture": {
+    "har": {
+      "har": "D:\\AI游戏比赛\\repo-cert-corpus\\out\\offline\\fixture-blocky.har",
+      "bytes": 9581,
+      "wire_bytes": 6933,
+      "entries": 1,
+      "methods": {
+        "GET": 1
+      },
+      "mime_types": {
+        "text/html": 1
+      }
+    },
+    "mirror": {
+      "entries": 1,
+      "served": 3,
+      "served_by": {
+        "exact": 3,
+        "normalized": 0,
+        "root_doc": 0
+      },
+      "ambiguous_norm_keys": 0,
+      "miss_calls": 0,
+      "distinct_misses": 0,
+      "miss_examples": [],
+      "passthrough": 0
+    },
+    "walk_hashes": 15,
+    "repack": {
+      "replayed": true,
+      "initial_hash_matched": true,
+      "steps_matched": 8,
+      "steps_total": 8,
+      "hashes_match": true,
+      "mismatch": null,
+      "storage_injected": false,
+      "determinism_class": {
+        "level": "bit_reproducible",
+        "claim": "同一 (初始状态, 种子, 动作序列) 在新实例里逐帧哈希全等"
+      }
+    }
+  },
+  "real": {
+    "mirror": {
+      "entries": 231,
+      "served": 484,
+      "served_by": {
+        "exact": 484,
+        "normalized": 0,
+        "root_doc": 0
+      },
+      "ambiguous_norm_keys": 0,
+      "miss_calls": 0,
+      "distinct_misses": 0,
+      "miss_examples": [],
+      "passthrough": 0
+    },
+    "bit_equal": true,
+    "rebuilt_rounds": 1,
+    "frames": 13,
+    "misses": [],
+    "episodes": [
+      {
+        "seed": 20261105,
+        "steps": 20,
+        "distinct_states": 7,
+        "defect": {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93"
+        },
+        "pack_id": "a668e81678650103",
+        "replayed": true,
+        "error": null
+      },
+      {
+        "seed": 20261106,
+        "steps": 23,
+        "distinct_states": 10,
+        "defect": {
+          "kind": "ui_dead_end",
+          "signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754"
+        },
+        "pack_id": "ef6b22c199b40365",
+        "replayed": true,
+        "error": null
+      }
+    ]
+  }
+}
