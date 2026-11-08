@@ -52,6 +52,20 @@ def check(label: str, ok: bool, detail: Any = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {label}" + (f"  [{detail}]" if detail else ""))
 
 
+def _fire_evidence_ok(verif: dict[str, Any]) -> bool:
+    """离线镜像保证的是「初始状态一致 + 定级诚实」，不是「异步应用必然位级复现」。
+
+    牛马地下城 23 步那枚按 repeat3 台账本就是 async_dependent（第 18 步动画分叉，
+    initial_hash_matched=true、前缀 18/23 可重放，见 evidence/ledger/niuma_repeat3.json）；
+    强求 replayed=True 会在合法样本上假红。下限 steps_matched>=1 挡「开机即崩」，
+    level 非 unverified 挡「镜像/探针坏了连初始状态都对不上」。
+    """
+    level = (verif.get("determinism_class") or {}).get("level")
+    return (verif.get("initial_hash_matched") is True
+            and level in ("bit_reproducible", "async_dependent")
+            and int(verif.get("steps_matched", 0)) >= 1)
+
+
 class _Quiet(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -260,8 +274,25 @@ def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
               f"err={r['error']}")
     check("真实作品离线扫描有开火", bool(fire),
           [(r["seed"], r["defect"]["kind"]) for r in fire] or "种子都没抓到缺陷")
-    check("开火的包在离线环境里 replayed=true", bool(fire) and all(r["replayed"] for r in fire),
-          [(r["seed"], r["replayed"]) for r in fire])
+    fire_verifs: dict[int, Any] = {}
+    for r in fire:
+        pp = OUT / "real-packs" / f"{r['policy']}-{r['seed']}-{r['pack_id']}.json"
+        fire_verifs[r["seed"]] = (
+            json.loads(pp.read_text(encoding="utf-8")).get("verification", {})
+            if pp.exists() else {})
+    check("开火的包离线初始状态一致且定级诚实（非 unverified）",
+          bool(fire) and all(_fire_evidence_ok(v) for v in fire_verifs.values()),
+          [(s, (v.get("determinism_class") or {}).get("level"),
+            v.get("steps_matched"), v.get("steps_total")) for s, v in fire_verifs.items()])
+    check("离线复现判据负控：unverified/初始不符/开机即崩必须判否",
+          not _fire_evidence_ok({"initial_hash_matched": False,
+                                 "determinism_class": {"level": "unverified"}, "steps_matched": 0})
+          and not _fire_evidence_ok({"initial_hash_matched": True,
+                                     "determinism_class": {"level": "async_dependent"}, "steps_matched": 0})
+          and _fire_evidence_ok({"initial_hash_matched": True,
+                                 "determinism_class": {"level": "async_dependent"},
+                                 "steps_matched": 18, "steps_total": 23}),
+          "broken→False, legal async 18/23→True")
     check("深度探索后仍未命中代码字节", not code_miss, code_miss[:3])
     print(f"   自重建补包：{rebuilt_rounds} 轮")
     return {"mirror": rep, "bit_equal": same, "rebuilt_rounds": rebuilt_rounds,
