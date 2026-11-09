@@ -1,0 +1,773 @@
+{
+  "schema": "playtest-withdrawal/1",
+  "recorded_at": "2026-11-08T17:10:31+0800",
+  "scope": "local_operational_ledger",
+  "summary": {
+    "claims_published_before": 6,
+    "claims_withdrawn": 6,
+    "claims_remaining": 0,
+    "replays_before": 6,
+    "replays_after": 3,
+    "levels_after": {
+      "bit_reproducible": 2,
+      "async_dependent": 1
+    },
+    "packs_removed": [
+      "0aaf2d192c4051ad",
+      "d3905699adb62460",
+      "733c63124471c605"
+    ]
+  },
+  "why": "六枚已公开的 ui_dead_end 全部被自家仪器复核推翻：效果真实存在或监听器真实挂着，只是当时的派发方式与指纹通道看不见。撤回的是「这些控件是死路」这个结论，不是「离线取包与确定性重放」这个能力——后者由保留下来的复现包与自有夹具见证继续承载。",
+  "evidence_form_note": "第三方作品的原始 HAR 与响应字节按纪律只留 gitignored out/，不随仓库分发。因此逐枚读数属本地操作留痕；clone 下来可直接复核的是仪器修复本身与它在自有夹具上的见证（见 instrument_fixes.witness），那三类假阳性在自有夹具上都能重现并已被判据钉住。",
+  "withdrawn_claims": [
+    {
+      "game_id": "work-a",
+      "pack_id": "a668e81678650103",
+      "signature": "deadend:click:div:计数型展示容器@0e09d6781b93",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C4",
+      "cause": "监听器挂在祖先容器上（事件委托，含 React 合成事件根），且该控件在当前局面下是合法空操作（道具未解锁／资源不足／尚未抵达）⇒「点了没变化」不等于「死路」",
+      "instrument": "s2_rootcause_drift_chain（无点击漂移基线 + 全祖先链 CDP 监听器普查）",
+      "evidence_form": "real_har_same_pack",
+      "rationale": "同一枚 pack、台账绑定 HAR：目标自身与祖先链深度 6 的根容器都带 click（后者是整套 React 合成事件），且无点击时 canvas/html 自主漂移；三次点击只改 canvas 通道、beyond_drift 三次皆空（落在自主漂移之内） ⇒ 该局面下是合法空操作，不是死路",
+      "readings": {
+        "verdict": "LISTENERS_PRESENT_EFFECT_UNSEEN",
+        "any_listener_in_chain": true,
+        "ancestor_chain": {
+          "available": true,
+          "nodes": [
+            {
+              "depth": 0,
+              "listener_types": 1,
+              "click_site_count": 1,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 1,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 2,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 3,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 4,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 5,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 6,
+              "listener_types": 80,
+              "click_site_count": 3,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 7,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 8,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 9,
+              "listener_types": 2,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 10,
+              "listener_types": 5,
+              "click_site_count": 0,
+              "has_click_family": true,
+              "inline_onclick": false
+            }
+          ]
+        },
+        "drift_channels_without_click": [
+          "canvas_fnv",
+          "html_fnv",
+          "target_outer"
+        ],
+        "click_channels_beyond_drift": [
+          [],
+          [],
+          []
+        ],
+        "click_changed_channels": [
+          [
+            "canvas_fnv"
+          ],
+          [
+            "canvas_fnv"
+          ],
+          [
+            "canvas_fnv"
+          ]
+        ],
+        "click_wrote_storage": [
+          false,
+          false,
+          false
+        ],
+        "fingerprint_change": false,
+        "controls": {
+          "CTL_LIVE_pass": true,
+          "CTL_DEAD_pass": true,
+          "all_pass": true,
+          "CTL_LIVE_beyond_drift": [
+            "html_fnv",
+            "target_disabled",
+            "target_outer",
+            "text_fnv"
+          ],
+          "CTL_DEAD_beyond_drift": []
+        },
+        "mirror_served": 62,
+        "mirror_miss_calls": 0,
+        "page_exceptions": 0,
+        "asset_errors": 0
+      }
+    },
+    {
+      "game_id": "work-a",
+      "pack_id": "ef6b22c199b40365",
+      "signature": "deadend:click:button:场景切换按钮@88c4557ac754",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C3",
+      "cause": "指纹盲区：domRead 只取前 40 个可见叶子文本、且不读 localStorage ⇒ 晚期写入看不见",
+      "instrument": "s2_rootcause_drift_chain（无点击漂移基线 + 全祖先链 CDP 监听器普查）",
+      "evidence_form": "real_har_same_pack",
+      "rationale": "同一枚 pack、台账绑定 HAR：第一次点击在漂移基线之外改变了 html/text/元素数/目标.outerHTML，并写了 localStorage ⇒ 效果真实存在，只是指纹看不见",
+      "readings": {
+        "verdict": "INSTRUMENT_BLIND",
+        "any_listener_in_chain": true,
+        "ancestor_chain": {
+          "available": true,
+          "nodes": [
+            {
+              "depth": 0,
+              "listener_types": 1,
+              "click_site_count": 1,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 1,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 2,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 3,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 4,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 5,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 6,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 7,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 8,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 9,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 10,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 11,
+              "listener_types": 80,
+              "click_site_count": 3,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 12,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 13,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            }
+          ]
+        },
+        "drift_channels_without_click": [],
+        "click_channels_beyond_drift": [
+          [
+            "elem_count",
+            "html_fnv",
+            "target_outer",
+            "text_fnv"
+          ],
+          [],
+          []
+        ],
+        "click_changed_channels": [
+          [
+            "html_fnv",
+            "text_fnv",
+            "elem_count",
+            "target_outer"
+          ],
+          [],
+          []
+        ],
+        "click_wrote_storage": [
+          true,
+          true,
+          true
+        ],
+        "fingerprint_change": false,
+        "controls": {
+          "CTL_LIVE_pass": true,
+          "CTL_DEAD_pass": true,
+          "all_pass": true,
+          "CTL_LIVE_beyond_drift": [
+            "html_fnv",
+            "target_disabled",
+            "target_outer",
+            "text_fnv"
+          ],
+          "CTL_DEAD_beyond_drift": []
+        },
+        "mirror_served": 52,
+        "mirror_miss_calls": 0,
+        "page_exceptions": 0,
+        "asset_errors": 0
+      }
+    },
+    {
+      "game_id": "work-b",
+      "pack_id": "25dc2578c3197948",
+      "signature": "deadend:click:button:计数型按钮@f61a8ad49758",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C4",
+      "cause": "监听器挂在祖先容器上（事件委托，含 React 合成事件根），且该控件在当前局面下是合法空操作（道具未解锁／资源不足／尚未抵达）⇒「点了没变化」不等于「死路」",
+      "instrument": "s2_rootcause_drift_chain（无点击漂移基线 + 全祖先链 CDP 监听器普查）",
+      "evidence_form": "real_har_same_pack",
+      "rationale": "同一枚 pack、台账绑定 HAR 上重放：目标自身无监听器，祖先链深度 1 的容器带 click",
+      "readings": {
+        "verdict": "LISTENERS_PRESENT_EFFECT_UNSEEN",
+        "any_listener_in_chain": true,
+        "ancestor_chain": {
+          "available": true,
+          "nodes": [
+            {
+              "depth": 0,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 1,
+              "listener_types": 1,
+              "click_site_count": 1,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 2,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 3,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 4,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            },
+            {
+              "depth": 5,
+              "listener_types": 2,
+              "click_site_count": 0,
+              "has_click_family": true,
+              "inline_onclick": false
+            },
+            {
+              "depth": 6,
+              "listener_types": 0,
+              "click_site_count": 0,
+              "has_click_family": false,
+              "inline_onclick": false
+            }
+          ]
+        },
+        "drift_channels_without_click": [],
+        "click_channels_beyond_drift": [
+          [],
+          [],
+          []
+        ],
+        "click_changed_channels": [
+          [],
+          [],
+          []
+        ],
+        "click_wrote_storage": [
+          false,
+          false,
+          false
+        ],
+        "fingerprint_change": false,
+        "controls": {
+          "CTL_LIVE_pass": true,
+          "CTL_DEAD_pass": true,
+          "all_pass": true,
+          "CTL_LIVE_beyond_drift": [
+            "html_fnv",
+            "target_disabled",
+            "target_outer",
+            "text_fnv"
+          ],
+          "CTL_DEAD_beyond_drift": []
+        },
+        "mirror_served": 20,
+        "mirror_miss_calls": 0,
+        "page_exceptions": 0,
+        "asset_errors": 0
+      }
+    },
+    {
+      "game_id": "work-b",
+      "pack_id": "0aaf2d192c4051ad",
+      "signature": "deadend:click:button:开关型控件@d358a97d4de5",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C1",
+      "cause": "domApply 对一个动作派发两遍 click，开关型控件被拨过去又拨回来 ⇒ 指纹逐位不变",
+      "instrument": "s2_audio_adjudicate（本地重建夹具 + 修好双派发后的指纹前后对比）",
+      "evidence_form": "local_reconstructed_fixture",
+      "rationale": "本地重建的同形态开关型控件夹具：修好双派发后 fingerprint_changed=true、通道 texts",
+      "readings": {
+        "fixture_case": "work-b",
+        "mode": "dom-fallback",
+        "leaf_nodes_total": 185,
+        "texts_captured": 33,
+        "action_in_space": true,
+        "apply_ok": true,
+        "raw_dom_changed": true,
+        "fingerprint_changed": true,
+        "channels_changed": [
+          "texts"
+        ],
+        "page_exceptions": 0,
+        "local_404": 0,
+        "external_requests_blocked": 0,
+        "probe_sha256": "a3ef89547c8517e691e330720b769acf290533f01e1b2ed08bca2a4f39f20baf"
+      }
+    },
+    {
+      "game_id": "work-c",
+      "pack_id": "d3905699adb62460",
+      "signature": "deadend:click:button:开关型控件@b282a1262875",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C1",
+      "cause": "domApply 对一个动作派发两遍 click，开关型控件被拨过去又拨回来 ⇒ 指纹逐位不变",
+      "instrument": "s2_audio_adjudicate（本地重建夹具 + 修好双派发后的指纹前后对比）",
+      "evidence_form": "local_reconstructed_fixture",
+      "rationale": "本地重建的同形态开关型控件夹具：修好双派发后 fingerprint_changed=true",
+      "readings": {
+        "fixture_case": "work-c",
+        "mode": "dom-fallback",
+        "leaf_nodes_total": 156,
+        "texts_captured": 28,
+        "action_in_space": true,
+        "apply_ok": true,
+        "raw_dom_changed": true,
+        "fingerprint_changed": true,
+        "channels_changed": [
+          "buttons",
+          "texts"
+        ],
+        "page_exceptions": 0,
+        "local_404": 0,
+        "external_requests_blocked": 0,
+        "probe_sha256": "a3ef89547c8517e691e330720b769acf290533f01e1b2ed08bca2a4f39f20baf"
+      }
+    },
+    {
+      "game_id": "work-c",
+      "pack_id": "733c63124471c605",
+      "signature": "deadend:click:button:开关型控件@6c4b9bf90550",
+      "published_in": "evidence/corpus.json games[].defects[]",
+      "verdict": "withdrawn_false_positive",
+      "cause_code": "C1",
+      "cause": "domApply 对一个动作派发两遍 click，开关型控件被拨过去又拨回来 ⇒ 指纹逐位不变",
+      "instrument": "s2_audio_adjudicate（本地重建夹具 + 修好双派发后的指纹前后对比）",
+      "evidence_form": "local_reconstructed_fixture",
+      "rationale": "与上一枚同一控件（两种子各录一枚）⇒ 同一成因，读数同上",
+      "readings": {
+        "fixture_case": "work-c",
+        "mode": "dom-fallback",
+        "leaf_nodes_total": 156,
+        "texts_captured": 28,
+        "action_in_space": true,
+        "apply_ok": true,
+        "raw_dom_changed": true,
+        "fingerprint_changed": true,
+        "channels_changed": [
+          "buttons",
+          "texts"
+        ],
+        "page_exceptions": 0,
+        "local_404": 0,
+        "external_requests_blocked": 0,
+        "probe_sha256": "a3ef89547c8517e691e330720b769acf290533f01e1b2ed08bca2a4f39f20baf"
+      }
+    }
+  ],
+  "replay_dispositions": [
+    {
+      "pack_id": "a668e81678650103",
+      "game_id": "work-a",
+      "steps": 20,
+      "seed": 20261105,
+      "ledger_level": "bit_reproducible",
+      "ledger_pack_sha256": "3bbf648775b3a75fcdb0db83301c9ee97819135d9699e63f89840c73ed86e6f6",
+      "remeasure_pack_sha256": "020356699fc12556b4402fa5edc94973138d8453057763114a894ad20850fb98",
+      "bytes_identical_to_ledger": false,
+      "ledger_bytes_still_on_disk": false,
+      "remeasure_level_as_reported_by_instrument": "bit_reproducible",
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        20,
+        20,
+        20
+      ],
+      "mismatch_sites": [],
+      "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2",
+      "disposition": "换了输入 ⇒ 今天的绿不许升昨天的级；台账原级保留（台账绑定字节已不在盘上）"
+    },
+    {
+      "pack_id": "ef6b22c199b40365",
+      "game_id": "work-a",
+      "steps": 23,
+      "seed": 20261106,
+      "ledger_level": "async_dependent",
+      "ledger_pack_sha256": "5bb9dcf519da21821282dab234b43d648cfddcbf87cf666042570b8261d0d7d5",
+      "remeasure_pack_sha256": "d0adcef2bcf265f6482a4dcdc9ad8e167de555848d9d5e079fcab973c00c8e41",
+      "bytes_identical_to_ledger": false,
+      "ledger_bytes_still_on_disk": false,
+      "remeasure_level_as_reported_by_instrument": "bit_reproducible",
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        23,
+        23,
+        23
+      ],
+      "mismatch_sites": [],
+      "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2",
+      "disposition": "换了输入 ⇒ 今天的绿不许升昨天的级；台账原级保留（台账绑定字节已不在盘上）"
+    },
+    {
+      "pack_id": "25dc2578c3197948",
+      "game_id": "work-b",
+      "steps": 3,
+      "seed": 20261105,
+      "ledger_level": "bit_reproducible",
+      "ledger_pack_sha256": "84054a0f7b2646b3f88f9447b1ead2495f150382405a7852693f8b90657161fe",
+      "remeasure_pack_sha256": "84054a0f7b2646b3f88f9447b1ead2495f150382405a7852693f8b90657161fe",
+      "bytes_identical_to_ledger": true,
+      "ledger_bytes_still_on_disk": true,
+      "remeasure_level_as_reported_by_instrument": "bit_reproducible",
+      "all_runs_replayed": true,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        3,
+        3,
+        3
+      ],
+      "mismatch_sites": [],
+      "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d",
+      "disposition": "可直接更新台账定级"
+    },
+    {
+      "pack_id": "0aaf2d192c4051ad",
+      "game_id": "work-b",
+      "steps": 5,
+      "seed": 20261106,
+      "ledger_level": "bit_reproducible",
+      "ledger_pack_sha256": "fc51a7c85427109f1dd5f2fdfc7f06c9307bb5ef390b4ffd7dbda4e65bb0a87b",
+      "remeasure_pack_sha256": "fc51a7c85427109f1dd5f2fdfc7f06c9307bb5ef390b4ffd7dbda4e65bb0a87b",
+      "bytes_identical_to_ledger": true,
+      "ledger_bytes_still_on_disk": true,
+      "remeasure_level_as_reported_by_instrument": "async_dependent",
+      "all_runs_replayed": false,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        4,
+        4,
+        4
+      ],
+      "mismatch_sites": [
+        [
+          4,
+          "click:button:开关型控件"
+        ]
+      ],
+      "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d",
+      "disposition": "确定性失配（仪器版本绑定）⇒ 从台账移除，不许记 async_dependent"
+    },
+    {
+      "pack_id": "d3905699adb62460",
+      "game_id": "work-c",
+      "steps": 3,
+      "seed": 20261105,
+      "ledger_level": "bit_reproducible",
+      "ledger_pack_sha256": "67fdfdac2b729781fe81e0d5cb737f11f38df0b91e94154334e2e60b34c2930c",
+      "remeasure_pack_sha256": "67fdfdac2b729781fe81e0d5cb737f11f38df0b91e94154334e2e60b34c2930c",
+      "bytes_identical_to_ledger": true,
+      "ledger_bytes_still_on_disk": true,
+      "remeasure_level_as_reported_by_instrument": "async_dependent",
+      "all_runs_replayed": false,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        2,
+        2,
+        2
+      ],
+      "mismatch_sites": [
+        [
+          2,
+          "click:button:开关型控件"
+        ]
+      ],
+      "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d",
+      "disposition": "确定性失配（仪器版本绑定）⇒ 从台账移除，不许记 async_dependent"
+    },
+    {
+      "pack_id": "733c63124471c605",
+      "game_id": "work-c",
+      "steps": 2,
+      "seed": 20261106,
+      "ledger_level": "bit_reproducible",
+      "ledger_pack_sha256": "c8136cf9ce3ac41f37f0f5189a632d6e39ef84279e915cce3c24c8997b461468",
+      "remeasure_pack_sha256": "c8136cf9ce3ac41f37f0f5189a632d6e39ef84279e915cce3c24c8997b461468",
+      "bytes_identical_to_ledger": true,
+      "ledger_bytes_still_on_disk": true,
+      "remeasure_level_as_reported_by_instrument": "async_dependent",
+      "all_runs_replayed": false,
+      "per_run_readings_identical": true,
+      "steps_matched": [
+        1,
+        1,
+        1
+      ],
+      "mismatch_sites": [
+        [
+          1,
+          "click:button:开关型控件"
+        ]
+      ],
+      "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d",
+      "disposition": "确定性失配（仪器版本绑定）⇒ 从台账移除，不许记 async_dependent"
+    }
+  ],
+  "instrument_controls": [
+    {
+      "case": "ctl_observable",
+      "leaf_nodes_total": 5,
+      "texts_captured": 4,
+      "fingerprint_changed": true,
+      "expected_fingerprint_changed": true,
+      "control_pass": true
+    },
+    {
+      "case": "ctl_truncated",
+      "leaf_nodes_total": 62,
+      "texts_captured": 40,
+      "fingerprint_changed": false,
+      "expected_fingerprint_changed": false,
+      "control_pass": true
+    },
+    {
+      "case": "ctl_title",
+      "leaf_nodes_total": 3,
+      "texts_captured": 2,
+      "fingerprint_changed": true,
+      "expected_fingerprint_changed": true,
+      "control_pass": true
+    }
+  ],
+  "instrument_fixes": [
+    {
+      "id": "C1",
+      "what": "domApply 一个动作只派发一次 click（去掉多余的 el.click()）",
+      "landed_in": "probe/probe.js",
+      "witness": "tests/m1_fallback.py 段 D：导航 loc_hash、checkbox checked、真实坐标三条正对照＋真没接线的控件仍被判死路",
+      "witness_scope": "in_repo_fixture"
+    },
+    {
+      "id": "C3/C4",
+      "what": "check_ui_dead_end 增接线守卫：整条 click 传播链（目标→祖先→document→window，含内联 on*）上量不到任何监听器才允许判死路；量不到就沉默",
+      "landed_in": "playtest/detectors.py",
+      "witness": "tests/m1_fallback.py 段 E（容器委托＋指纹盲区边界）与段 F（document/window 全链，reached_window=true、nodes=5）",
+      "witness_scope": "in_repo_fixture",
+      "fixtures": [
+        "games/deadend-delegation/index.html",
+        "games/deadend-limits/index.html",
+        "games/toggle-sound/index.html"
+      ]
+    },
+    {
+      "id": "IFRAME",
+      "what": "click_wiring 拿到承载应用那个 frame 的 CDP 会话：先试 frame 自己的会话（跨源 OOPIF），被浏览器拒绝再退 page 会话＋显式 contextId（同进程 iframe）；两支都认不出唯一 frame 就报「测不到」，绝不猜一个文档去量",
+      "landed_in": "playtest/detectors.py",
+      "why_it_mattered": "修接线守卫之前，凡 iframe 承载的作品一律 available=False ⇒ 守卫把整个作品群静默消音（量不到就当没接线也不当接了线，两边都不报）。这是比假阳性更隐蔽的失明：读数看起来是「没有候选」，实际是「一个都没量到」。",
+      "witness": "tests/m1_fallback.py 段 G（同进程 iframe，77 项全绿）与段 H（跨源 OOPIF，累计 101 项全绿）。段 H 带四条前提钉：frame≠主文档／内层与外壳不同 site／OOPIF 有自己的会话且探针在／page 会话的 frame tree 里没有它 ⇒ 浏览器进程模型一变就当场判红，不会静默退回段 G 的重复。两种形态各有正负对照：真没接线的控件仍开火（wired=false、sites=[]、reached_window=true、nodes=5），document 委托量得到（depth 3 site）且沉默。",
+      "witness_scope": "in_repo_fixture",
+      "fixtures": [
+        "games/deadend-iframe/index.html",
+        "games/deadend-iframe/app.html",
+        "games/deadend-iframe/unwired.html",
+        "games/deadend-iframe/app-unwired.html"
+      ],
+      "external_confirmation": "两件跨源 iframe 承载的外部作品复验：修前 27 个动作全 frame_context_not_resolvable，修后首屏 click 控件全部 available=true／wired=true／reached_window=true／nodes=8。零派发动作，不消耗作者额度。"
+    }
+  ],
+  "known_gaps": [
+    "指纹仍不读 localStorage、可见叶子文本仍截前 40 条。本轮选择用接线守卫止住假阳性，不改指纹——改指纹会让所有既有复现包的含义变化（历史教训已登记）。",
+    "tools/replay_repeat.py 的 level 词表只有 bit_reproducible / async_dependent 两档，无法表达「被仪器修复确定性地作废」。本轮三枚失配包按纪律从台账移除而不是记 async_dependent，词表缺口另批修（改 schema 需自己的红绿循环）。",
+    "在 React 这类把合成事件挂在根容器上的应用里，接线守卫必然量到「接了线」⇒ 探测器会沉默。这是取舍：宁可漏报也不误报；处理器真的抛错仍由 page-exception 通道开火。",
+    "对外部作品的勘察只做到「首屏＋零派发」：两件可达作品共量到 5 个动作（其余 22 个是键动作，无元素可定位，属预期），全部接了线、候选 0。这条读数**不能**推出「这两件深处没有死路」——要往下走必须派发动作，而这两件会消耗作者额度，须作者许可。当前结论只覆盖首屏。",
+    "tests/m3_offline.py 的常驻臂已按用户拍板（② 拆臂）诚实重构并转绿（全门 18/18 PASS）：旧「真实作品离线扫描有开火」bool(fire) 把仪器/镜像健康与作品是否恰好有可发现缺陷混为一谈，后者是作品的经验属性、不是工具质量门。现改为断言「镜像健康度：扫描有效完整」（_scan_valid_ok：served>0、无 code_miss、每局 error None 且 steps>0），开火数作诚实发现单独报告（work-a 健康，两种子 40/120 步零开火＝诚实负，非仪器失败）。离线发现并复现缺陷的能力仍由段3 自有夹具 canary 守（planted unwinnable 缺陷开火＋8/8 bit_reproducible）。未删断言、未放宽阈值（新判据对仪器健康更严）、未换夹具、未重指 REAL_URL。witness 见 tests/m3_offline.py 段3 canary 与段4 镜像健康度腿。"
+  ],
+  "author_side": {
+    "contacted": false,
+    "report_published": false,
+    "author_confirmation_status": "not_requested",
+    "note": "撤回不改变作者侧状态：零联系、零发帖、三枚 author_confirmation 仍 not_requested。"
+  },
+  "derived_from": [
+    {
+      "file": "evidence/corpus.json",
+      "sha256": "7b7cd0e7e297ba1e1c6694416b6ae13faec286f9d9f4b85374778c28544e8d3f",
+      "distributed": true,
+      "version": "pre_withdrawal",
+      "note": "这是撤回**之前**那份台账的哈希（六枚主张、六枚复现包）。撤回件由它派生，所以钉的是它的字节；撤回落地后 corpus.json 会变成三枚复现包、零枚主张，那份新字节由 git 历史与本件的 replay_dispositions 共同见证，不在此处冒领。"
+    }
+  ],
+  "local_records_not_distributed": [
+    {
+      "file": "rootcause_drift_chain_work-a_work-b_work-c.json",
+      "sha256": "f59ee3671a12492d022b7c708460902df8dfbbc35411e939f11e109540386bea",
+      "distributed": false,
+      "note": "本地操作留痕（含第三方原始字节窗口），按纪律不进公开仓库；上面每条 readings 都是从它派生的投影"
+    },
+    {
+      "file": "s2_pack_byte_binding_1108.json",
+      "sha256": "685aa9784a775127a10ed0c2c997f0b3cc98c642362b533b22b34e10c7c01b1a",
+      "distributed": false,
+      "note": "本地操作留痕（含第三方原始字节窗口），按纪律不进公开仓库；上面每条 readings 都是从它派生的投影"
+    },
+    {
+      "file": "s2_audio_adjudicate_1108.json",
+      "sha256": "3c23f151938988ebb4df55588cc7cec8c9ac65f043ce820f3a9208fc31411616",
+      "distributed": false,
+      "note": "本地操作留痕（含第三方原始字节窗口），按纪律不进公开仓库；上面每条 readings 都是从它派生的投影"
+    }
+  ]
+}

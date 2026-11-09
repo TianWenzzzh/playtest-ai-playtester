@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>deadend-delegation</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  button { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h1>document/window 级委托夹具</h1>
+<p id="status">计数 <span id="n">0</span></p>
+
+<button id="plain" aria-label="PLAIN_EFFECTIVE">EARN</button>
+<button id="doc" aria-label="DOC_DELEGATE">DOC_ONLY</button>
+<button id="win" aria-label="WIN_DELEGATE">WIN_ONLY</button>
+
+<!-- 没有任何 GSPP 相关代码：这一页是 DOM 兜底判据的边界夹具，故意不接协议。
+     形状取自实测的第三方作品（已去身份）：监听器挂在 document / window 上，
+     控件自身与所有父容器一个都没有。React 16 就是把整套合成事件挂在 document 上的。 -->
+<script>
+window.__FIRES_DOC__ = 0;
+window.__FIRES_WIN__ = 0;
+window.__N__ = 0;
+
+document.getElementById("plain").addEventListener("click", function () {
+  window.__N__++;
+  document.getElementById("n").textContent = String(window.__N__);
+});
+
+// 处理器真的跑，但在本状态下不改任何进指纹的东西 —— 与「没接线」在指纹上完全同形。
+document.addEventListener("click", function (e) {
+  if (e.target.id !== "doc") return;
+  window.__FIRES_DOC__++;
+});
+
+window.addEventListener("click", function (e) {
+  if (e.target.id !== "win") return;
+  window.__FIRES_WIN__++;
+});
+</script>
+</body>
+</html>

@@ -109,6 +109,14 @@
     return uniq.slice(0, 40);
   }
 
+  function findInteractive(tag, label) {
+    var its = interactive();
+    for (var i = 0; i < its.length; i++) {
+      if (its[i].tag === tag && its[i].label === label) return its[i].el;
+    }
+    return null;
+  }
+
   function domRead() {
     var texts = [];
     try {
@@ -176,11 +184,7 @@
       // 按名字重新定位，不用录制时的 index：
       // DOM 兜底的元素列表会随界面切换而变（商店打开后"挖矿"就不在场了），
       // 拿旧 index 去点，点的会是另一个按钮 —— 轨迹当场失真。
-      var its = interactive();
-      var el = null;
-      for (var q = 0; q < its.length; q++) {
-        if (its[q].tag === a.tag && its[q].label === a.label_key) { el = its[q].el; break; }
-      }
+      var el = findInteractive(a.tag, a.label_key);
       if (!el) return false;
       // 🔴 滑杆与下拉框不能只靠派发的 MouseEvent：非可信事件跑不动浏览器自己实现的
       // 轨道拖拽/弹层选择（实测在真实作品上，音量滑杆点完值纹丝不动，
@@ -220,8 +224,11 @@
           el.dispatchEvent(new MouseEvent("mousedown", opts));
         }
         el.dispatchEvent(new MouseEvent("mouseup", opts));
+        // 一个动作只能触发一次 click。这里原先还补一次 el.click()，监听器就跑两遍：
+        // 开关型控件（静音/语音）被拨过去又拨回来 ⇒ 指纹逐位不变 ⇒ 接好线的控件被判死路。
+        // 合成 click 自己就跑浏览器默认行为而且带坐标，所以只留这一条；
+        // 导航 / checked / 真实坐标三条正对照的现役见证在 tests/m1_fallback.py 段 D。
         el.dispatchEvent(new MouseEvent("click", opts));
-        if (el.tagName === "A" || el.tagName === "BUTTON") el.click && el.click();
       } catch (e) {
         (window.__GSPP_ERRORS__ = window.__GSPP_ERRORS__ || []).push({ kind: "apply", message: String(e), atFrame: -1 });
         return false;
@@ -372,6 +379,16 @@
       return { ok: domApply(found) };
     },
 
+    // 把动作名解析回 DOM 节点本身，与 domApply 用同一个定位器（不许各写一份）。
+    // 判据要靠它问浏览器"这条 click 链上到底有没有监听器"；只读节点，不派发事件、
+    // 不进 domRead()，所以状态指纹与既有复现包都不受影响。
+    elementFor: function (name) {
+      if (typeof name !== "string" || name.indexOf("click:") !== 0) return null;
+      var rest = name.slice(6), cut = rest.indexOf(":");
+      if (cut < 0) return null;
+      return findInteractive(rest.slice(0, cut), rest.slice(cut + 1));
+    },
+
     invariants: function () {
       if (!adapter || !adapter.invariants) return [];
       try {
@@ -419,7 +436,7 @@
     // 🔴 持久状态。种子的前提是"状态只由 (seed, 动作) 决定"，
     // 但真实应用普遍把进度写进 localStorage / sessionStorage / cookie：
     // 第一遍试玩点了"开始新游戏"就落了档，重放时界面已经不一样了，
-    // 于是复现包在真实作品上必然回放不过 —— 实测在牛马地下城上就是这么分歧的。
+    // 于是复现包在真实作品上必然回放不过 —— 实测在作品 A（脱敏代号）上就是这么分歧的。
     // 所以复现包必须自带这份持久状态，回放前先装回去。
     storage: function () {
       var out = { localStorage: {}, sessionStorage: {}, cookie_present: false, oversized: [] };

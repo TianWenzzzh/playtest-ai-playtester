@@ -1,41 +1,33 @@
 {
   "schema": "playtest-corpus/1",
   "scope": "local_operational_ledger",
+  "redaction": {
+    "note": "第三方作品的名字、作者 handle 与来源 URL 在当前 checkout 里不随台账分发：id/title 用不可追溯代号，source_url 用 RFC 2606 保留域 .invalid（故意不可解析，不冒充真来源）。真实地址由使用者本地供给（PLAYTEST_REAL_URL / PLAYTEST_READONLY_URL_1 / _2）；缺变量时对应脚本判红退出，不静默跳过。脱敏改身份字段与游戏内 UI 标签原文（换成不可搜索的角色描述，保留 deadend:click:<tag>: 前缀与 @指纹哈希）：读数、定级、pack_id、输入 HAR 哈希、field_caliber 一律未动；脱敏前的逐字节原件与 sha 清单留在开发工作区，不随仓库分发。🔴 此脱敏只覆盖当前 checkout，不覆盖 git 历史：脱敏前提交（身份命名台账、游戏内 UI 原文、真实来源 URL）仍在历史里，完整 clone 会一并拉到；本仓未重写历史，故不主张「完全不可追溯／公开面无残留」。判据见 tests/m5_corpus.py 第 7 段。",
+    "changed_fields": ["games[].id", "games[].title", "games[].source_url", "games[].author.name", "games[].replays[].evidence", "games[].replays[].evidence_sha256", "withdrawal.ledger_sha256"],
+    "unchanged_fields": ["games[].replays[].pack_id", "games[].replays[].level", "games[].replays[].input_har_sha256", "games[].replays[].seed", "games[].replays[].steps", "withdrawal.claims_withdrawn", "withdrawal.replays_removed"]
+  },
   "games": [
     {
-      "id": "niuma-dungeon",
-      "title": "牛马地下城",
-      "source_url": "https://weirdfish-niuma-dungeon.ms.show/",
+      "id": "work-a",
+      "title": "作品 A（脱敏代号）",
+      "source_url": "https://work-a.invalid/",
       "author": {
-        "name": "weirdfish"
+        "name": "author-a"
       },
       "ownership": "third_party",
       "permissions": {
         "exploration": "public_client_only",
         "publish_report": "not_requested"
       },
-      "defects": [
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93",
-          "evidence": "evidence/ledger/2026-11-06_m3_offline_fresh_summary.json",
-          "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
-        },
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754",
-          "evidence": "evidence/ledger/2026-11-06_m3_offline_fresh_summary.json",
-          "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
-        }
-      ],
+      "defects": [],
       "replays": [
         {
           "seed": 20261105,
           "steps": 20,
           "pack_id": "a668e81678650103",
           "level": "bit_reproducible",
-          "evidence": "evidence/ledger/niuma_repeat3.json",
-          "evidence_sha256": "00f22953c539ace4238b77a97ab7a5bfcefd3c792265f5b1ae336234cc18a940",
+          "evidence": "evidence/ledger/work-a_repeat3.json",
+          "evidence_sha256": "cc513fbc737a06253622b19516479871212fcb66eed2bffd74e7ce4126d8cc46",
           "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2"
         },
         {
@@ -43,8 +35,8 @@
           "steps": 23,
           "pack_id": "ef6b22c199b40365",
           "level": "async_dependent",
-          "evidence": "evidence/ledger/niuma_repeat3.json",
-          "evidence_sha256": "00f22953c539ace4238b77a97ab7a5bfcefd3c792265f5b1ae336234cc18a940",
+          "evidence": "evidence/ledger/work-a_repeat3.json",
+          "evidence_sha256": "cc513fbc737a06253622b19516479871212fcb66eed2bffd74e7ce4126d8cc46",
           "input_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2"
         }
       ],
@@ -54,48 +46,26 @@
       }
     },
     {
-      "id": "ycxxl",
-      "title": "优宠消消乐",
-      "source_url": "https://fshanfeng-ycxxl.ms.show/",
+      "id": "work-b",
+      "title": "作品 B（脱敏代号）",
+      "source_url": "https://work-b.invalid/",
       "author": {
-        "name": "fshanfeng"
+        "name": "author-b"
       },
       "ownership": "third_party",
       "permissions": {
         "exploration": "public_client_only",
         "publish_report": "not_requested"
       },
-      "defects": [
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:button:🔨 3@f61a8ad49758",
-          "evidence": "evidence/ledger/2026-11-06_ycxxl_offline_summary.json",
-          "evidence_sha256": "423b3ac573b112cfa99d45c5e696bccba91db392d87ed861a4409c351bea0fbb"
-        },
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:button:音效开关@d358a97d4de5",
-          "evidence": "evidence/ledger/2026-11-06_ycxxl_offline_summary.json",
-          "evidence_sha256": "423b3ac573b112cfa99d45c5e696bccba91db392d87ed861a4409c351bea0fbb"
-        }
-      ],
+      "defects": [],
       "replays": [
         {
           "seed": 20261105,
           "steps": 3,
           "pack_id": "25dc2578c3197948",
           "level": "bit_reproducible",
-          "evidence": "evidence/ledger/ycxxl_repeat3.json",
-          "evidence_sha256": "d02dccafe156b6fc86f765c0386e24b9d7af732fb5b1a3d3dcd2cee56a9c3cd2",
-          "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d"
-        },
-        {
-          "seed": 20261106,
-          "steps": 5,
-          "pack_id": "0aaf2d192c4051ad",
-          "level": "bit_reproducible",
-          "evidence": "evidence/ledger/ycxxl_repeat3.json",
-          "evidence_sha256": "d02dccafe156b6fc86f765c0386e24b9d7af732fb5b1a3d3dcd2cee56a9c3cd2",
+          "evidence": "evidence/ledger/work-b_repeat3.json",
+          "evidence_sha256": "cc0dde735789f299d0eefb93f8a5a5c227211dfdb234e30b313b239988353f22",
           "input_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d"
         }
       ],
@@ -105,55 +75,34 @@
       }
     },
     {
-      "id": "qianmen-ai-liar",
-      "title": "千门 · AI 千王擂台",
-      "source_url": "https://zhijiejj-qianmen-ai-liar.ms.show/",
+      "id": "work-c",
+      "title": "作品 C（脱敏代号）",
+      "source_url": "https://work-c.invalid/",
       "author": {
-        "name": "zhijiejj"
+        "name": "author-c"
       },
       "ownership": "third_party",
       "permissions": {
         "exploration": "public_client_only",
         "publish_report": "not_requested"
       },
-      "defects": [
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:button:气泡语音：开@b282a1262875",
-          "evidence": "evidence/ledger/2026-11-06_qianmen_offline_summary.json",
-          "evidence_sha256": "dfa97e489e3108133c4bf79bcb88169ea640ddbba71c9c8ca6f66cca3c9dbd7a"
-        },
-        {
-          "kind": "ui_dead_end",
-          "signature": "deadend:click:button:气泡语音：开@6c4b9bf90550",
-          "evidence": "evidence/ledger/2026-11-06_qianmen_offline_summary.json",
-          "evidence_sha256": "dfa97e489e3108133c4bf79bcb88169ea640ddbba71c9c8ca6f66cca3c9dbd7a"
-        }
-      ],
-      "replays": [
-        {
-          "seed": 20261105,
-          "steps": 3,
-          "pack_id": "d3905699adb62460",
-          "level": "bit_reproducible",
-          "evidence": "evidence/ledger/qianmen_repeat3.json",
-          "evidence_sha256": "250209160c1fcdb63a338661449295fbb6c9b375e6ac3395a3125ea13962b4d5",
-          "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d"
-        },
-        {
-          "seed": 20261106,
-          "steps": 2,
-          "pack_id": "733c63124471c605",
-          "level": "bit_reproducible",
-          "evidence": "evidence/ledger/qianmen_repeat3.json",
-          "evidence_sha256": "250209160c1fcdb63a338661449295fbb6c9b375e6ac3395a3125ea13962b4d5",
-          "input_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d"
-        }
-      ],
+      "defects": [],
+      "replays": [],
       "author_confirmation": {
         "status": "not_requested",
         "evidence": null
       }
     }
-  ]
+  ],
+  "withdrawal": {
+    "ledger": "evidence/ledger/2026-11-08_ui_dead_end_withdrawal.json",
+    "ledger_sha256": "3cdf50e3ce9b6041d82b510ab8372d843023e97023316e14b52114881993a219",
+    "claims_withdrawn": 6,
+    "replays_removed": [
+      "0aaf2d192c4051ad",
+      "733c63124471c605",
+      "d3905699adb62460"
+    ],
+    "note": "六枚已公开的 ui_dead_end 主张经自家仪器逐条复核后全部撤回（仪器假阳性）。撤回的是「这些控件是死路」这个结论，不是「离线取包与确定性重放」这个能力。逐枚成因、证据形态、仪器修复与见证、以及三枚失配包的处置见 ledger 指向的那份撤回件。保留下来的复现包一律取台账原定级，不拿今天的重测去升昨天的级。"
+  }
 }

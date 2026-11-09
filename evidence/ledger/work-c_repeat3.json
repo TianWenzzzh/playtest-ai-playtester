@@ -1,9 +1,9 @@
 {
   "schema": "playtest-offline-evidence/2",
   "game": {
-    "id": "qianmen-ai-liar",
-    "title": "千门 · AI 千王擂台",
-    "source_url": "https://zhijiejj-qianmen-ai-liar.ms.show/"
+    "id": "work-c",
+    "title": "作品 C（脱敏代号）",
+    "source_url": "https://work-c.invalid/"
   },
   "scope": "public_client_only_offline_replay",
   "offline_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d",
@@ -16,7 +16,7 @@
       "pack_sha256": "67fdfdac2b729781fe81e0d5cb737f11f38df0b91e94154334e2e60b34c2930c",
       "steps": 3,
       "defect_kind": "ui_dead_end",
-      "defect_signature": "deadend:click:button:气泡语音：开@b282a1262875",
+      "defect_signature": "deadend:click:button:开关型控件@b282a1262875",
       "runs": [
         {
           "rc": 0,
@@ -62,7 +62,7 @@
       "pack_sha256": "c8136cf9ce3ac41f37f0f5189a632d6e39ef84279e915cce3c24c8997b461468",
       "steps": 2,
       "defect_kind": "ui_dead_end",
-      "defect_signature": "deadend:click:button:气泡语音：开@6c4b9bf90550",
+      "defect_signature": "deadend:click:button:开关型控件@6c4b9bf90550",
       "runs": [
         {
           "rc": 0,

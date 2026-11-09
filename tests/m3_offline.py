@@ -5,23 +5,32 @@
 `_classify()` 的 mitigation 早就写了出口："把页面与资源取到本地离线跑"。
 这个文件就是那条出口的落地与验证。
 
-三段，缺一不可：
+四段，缺一不可：
   1. 管线正对照 —— 自有夹具走"录包 → 关源 → 离线重放"，必须仍然 bit_reproducible。
      证明新加的镜像层本身没有引入不确定性。
   2. 负控 —— 把镜像里那一条清掉，加载必须当场失败。
      证明页面吃的字节**真的**来自镜像，而不是背后那条还活着的网络。
      （捕获完之后本地服务是被 shut down 的，所以"没网还能跑"本身就是证据。）
-  3. 真实第三方作品（牛马地下城，作者不是我们，没接我们的协议）——
-     离线后 determinism_class 能不能从 async_dependent 升回 bit_reproducible。
+  3. 发现腿（自有夹具 canary）—— 在 planted 缺陷夹具上离线跑，必须发现缺陷且复现包
+     replayed=true。证明仪器本身有「离线发现并复现缺陷」的能力。
+  4. 真实第三方作品（作品 A（脱敏代号），作者不是我们，没接我们的协议）——
+     离线镜像健康度：扫描有效完整（供字节·代码全覆盖·探针未失明·每局 steps>0）。
+     不再要求「真实作品必须开火」：那是作品的经验属性，不是工具质量门。work-a 是健康
+     作品（40/120 步诚实负、17 池扫尽零开火），开火数作为诚实发现报告，0=诚实负而非仪器
+     失败。仪器「能发现缺陷」的能力由段3 canary 守；本段只在镜像/探针坏掉时判红（#15 拆臂）。
 
 跑法：PYTHONUTF8=1 ../.venv/Scripts/python.exe tests/m3_offline.py
-可选：--skip-real（只跑 1、2 段）／--recapture（重取 har）
+真实作品地址由本机供给：PLAYTEST_REAL_URL=https://…
+（公开仓库只留脱敏代号；缺这个变量时第 4 段判红而不是静默跳过，
+同 tests/release_public.py 的处置）。
+可选：--skip-real（只跑 1、2、3 段）／--recapture（重取 har）
 """
 from __future__ import annotations
 
 import functools
 import http.server
 import json
+import os
 import pathlib
 import re
 import socketserver
@@ -40,9 +49,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "out" / "offline"
 GAMES = ROOT / "games"
 
-REAL_URL = "https://weirdfish-niuma-dungeon.ms.show/"
-REAL_HOST = "https://weirdfish-niuma-dungeon.ms.show"
-REAL_HAR = OUT / "niuma-dungeon.har"
+REAL_URL = os.environ.get("PLAYTEST_REAL_URL", "")
+REAL_HOST = "/".join(REAL_URL.split("/")[:3]) if REAL_URL else ""
+REAL_HAR = OUT / "work-a.har"
 
 results: list[tuple[str, bool, str]] = []
 
@@ -55,8 +64,8 @@ def check(label: str, ok: bool, detail: Any = "") -> None:
 def _fire_evidence_ok(verif: dict[str, Any]) -> bool:
     """离线镜像保证的是「初始状态一致 + 定级诚实」，不是「异步应用必然位级复现」。
 
-    牛马地下城 23 步那枚按 repeat3 台账本就是 async_dependent（第 18 步动画分叉，
-    initial_hash_matched=true、前缀 18/23 可重放，见 evidence/ledger/niuma_repeat3.json）；
+    作品 A（脱敏代号） 23 步那枚按 repeat3 台账本就是 async_dependent（第 18 步动画分叉，
+    initial_hash_matched=true、前缀 18/23 可重放，见 evidence/ledger/work-a_repeat3.json）；
     强求 replayed=True 会在合法样本上假红。下限 steps_matched>=1 挡「开机即崩」，
     level 非 unverified 挡「镜像/探针坏了连初始状态都对不上」。
     """
@@ -64,6 +73,25 @@ def _fire_evidence_ok(verif: dict[str, Any]) -> bool:
     return (verif.get("initial_hash_matched") is True
             and level in ("bit_reproducible", "async_dependent")
             and int(verif.get("steps_matched", 0)) >= 1)
+
+
+def _scan_valid_ok(rep: dict[str, Any], code_miss: list[str],
+                   rows: list[dict[str, Any]]) -> bool:
+    """段4 诚实判据：真实作品离线镜像健康 + 扫描是一次有效完整的测量。
+
+    这不是「真实作品必须开火」（那是作品经验属性，不是工具质量门 —— work-a 健康，
+    40/120 步诚实负、17 池扫尽零开火）。开火数作为诚实发现单独报告，0=诚实负而非仪器
+    失败；仪器「能离线发现并复现缺陷」的能力由段3 自有夹具 canary 守，不靠这条臂。
+    本判据只在镜像/探针坏掉时判红：
+      served>0       镜像确实在供字节（空镜像/坏镜像 → 红）
+      not code_miss  代码字节全覆盖（懒加载未命中 → 红，归因仪器而非应用异步）
+      rows 非空且每局 error is None、steps>0  探针未失明、每局真跑起来了
+                     （挡 work-w 型 VOID：err+steps=0 被静默计为干净负，#29）
+    """
+    return (int(rep.get("served", 0)) > 0
+            and not code_miss
+            and len(rows) > 0
+            and all(r.get("error") is None and int(r.get("steps", 0)) > 0 for r in rows))
 
 
 class _Quiet(socketserver.ThreadingTCPServer):
@@ -204,10 +232,14 @@ def _click_walk(page, rounds: int = 4, per_round: int = 5) -> int:
 
 
 def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
-    print("\n== 4. 真实第三方作品（牛马地下城，作者不是我们）离线跑 ==")
+    print("\n== 4. 真实第三方作品（作品 A（脱敏代号），作者不是我们）离线跑 ==")
     if skip:
         print("   SKIP（--skip-real）")
         return {"skipped": True}
+    if not REAL_URL:
+        check("真实作品地址已配置", False,
+              "缺少 PLAYTEST_REAL_URL：未测，不能跳过后打印 PASS")
+        return {"skipped": True, "reason": "target_not_configured"}
     if recapture or not REAL_HAR.exists():
         info = capture(REAL_URL, REAL_HAR, warm=_click_walk)
         print(f"   取包：{info['entries']} 条 / {info['bytes']} B / 线上 {info['wire_bytes']} B "
@@ -272,18 +304,29 @@ def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
         print(f"   seed {r['seed']}: steps={r['steps']} states={r['distinct_states']} "
               f"defect={r['defect'] and r['defect']['kind']} replayed={r['replayed']} "
               f"err={r['error']}")
-    check("真实作品离线扫描有开火", bool(fire),
-          [(r["seed"], r["defect"]["kind"]) for r in fire] or "种子都没抓到缺陷")
+    check("真实作品镜像健康度：扫描有效完整（供字节·代码全覆盖·探针未失明·每局 steps>0）",
+          _scan_valid_ok(rep, code_miss, rows),
+          f"served={rep.get('served')} code_miss={len(code_miss)} rows={len(rows)} "
+          f"fires={len(fire)}（0=诚实负，非仪器失败）")
+    check("扫描有效判据负控：空镜像/代码未命中/探针失明/步数0/空局必须判否",
+          not _scan_valid_ok({"served": 0}, [], [{"error": None, "steps": 40}])
+          and not _scan_valid_ok({"served": 100}, ["chunk.js"], [{"error": None, "steps": 40}])
+          and not _scan_valid_ok({"served": 100}, [], [{"error": "RuntimeError", "steps": 0}])
+          and not _scan_valid_ok({"served": 100}, [], [{"error": None, "steps": 0}])
+          and not _scan_valid_ok({"served": 100}, [], [])
+          and _scan_valid_ok({"served": 100}, [], [{"error": None, "steps": 40}]),
+          "broken→False, healthy complete→True")
     fire_verifs: dict[int, Any] = {}
     for r in fire:
         pp = OUT / "real-packs" / f"{r['policy']}-{r['seed']}-{r['pack_id']}.json"
         fire_verifs[r["seed"]] = (
             json.loads(pp.read_text(encoding="utf-8")).get("verification", {})
             if pp.exists() else {})
-    check("开火的包离线初始状态一致且定级诚实（非 unverified）",
-          bool(fire) and all(_fire_evidence_ok(v) for v in fire_verifs.values()),
+    check("开火的包离线初始状态一致且定级诚实（非 unverified；无开火则空真，判据由负控守）",
+          all(_fire_evidence_ok(v) for v in fire_verifs.values()),
           [(s, (v.get("determinism_class") or {}).get("level"),
-            v.get("steps_matched"), v.get("steps_total")) for s, v in fire_verifs.items()])
+            v.get("steps_matched"), v.get("steps_total")) for s, v in fire_verifs.items()]
+          or "本轮无开火（诚实负）：判据强度由下方负控 + 段3 canary 守")
     check("离线复现判据负控：unverified/初始不符/开机即崩必须判否",
           not _fire_evidence_ok({"initial_hash_matched": False,
                                  "determinism_class": {"level": "unverified"}, "steps_matched": 0})

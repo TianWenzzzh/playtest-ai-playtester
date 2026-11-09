@@ -1,9 +1,9 @@
 {
   "schema": "playtest-offline-evidence/1",
   "game": {
-    "id": "ycxxl",
-    "title": "优宠消消乐",
-    "source_url": "https://fshanfeng-ycxxl.ms.show/"
+    "id": "work-b",
+    "title": "作品 B（脱敏代号）",
+    "source_url": "https://work-b.invalid/"
   },
   "scope": "public_client_only_offline_replay",
   "offline_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d",
@@ -16,7 +16,7 @@
       "recorded_at": "2026-11-06T19:08:04+0800",
       "defect": {
         "kind": "ui_dead_end",
-        "signature": "deadend:click:button:🔨 3@f61a8ad49758"
+        "signature": "deadend:click:button:计数型按钮@f61a8ad49758"
       },
       "scan_replayed": true,
       "independent_replay": {
@@ -24,9 +24,9 @@
           "-m",
           "playtest.cli",
           "replay",
-          "out\\offline\\ycxxl-packs\\curiosity-20261105-25dc2578c3197948.json",
+          "out\\offline\\work-b-packs\\curiosity-20261105-25dc2578c3197948.json",
           "--har",
-          "out/offline/ycxxl.har"
+          "out/offline/work-b.har"
         ],
         "rc": 0,
         "replayed": true,
@@ -50,7 +50,7 @@
       "recorded_at": "2026-11-06T19:08:07+0800",
       "defect": {
         "kind": "ui_dead_end",
-        "signature": "deadend:click:button:音效开关@d358a97d4de5"
+        "signature": "deadend:click:button:开关型控件@d358a97d4de5"
       },
       "scan_replayed": true,
       "independent_replay": {
@@ -58,9 +58,9 @@
           "-m",
           "playtest.cli",
           "replay",
-          "out\\offline\\ycxxl-packs\\curiosity-20261106-0aaf2d192c4051ad.json",
+          "out\\offline\\work-b-packs\\curiosity-20261106-0aaf2d192c4051ad.json",
           "--har",
-          "out/offline/ycxxl.har"
+          "out/offline/work-b.har"
         ],
         "rc": 0,
         "replayed": true,

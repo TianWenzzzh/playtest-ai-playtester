@@ -6,7 +6,7 @@
   invariant_violation 作者自己声明的不变量被违反（协议里 invariants() 的返回值）
   softlock           从当前状态出发，K 步内到不了任何终局 —— 玩家既赢不了也死不掉，永久卡住
   unwinnable         能到终局，但到不了"赢"的终局 —— 关卡已死，只是游戏还让你继续操作
-  ui_dead_end        （DOM 兜底模式）一个可见可点的控件，派发后状态指纹毫无变化
+  ui_dead_end        （DOM 兜底模式）一个可见可点的控件，派发后状态指纹毫无变化，且整条 click 链上无监听器
 
 softlock 与 unwinnable 的判定靠协议里的 snapshot/restore：
 把当前状态存下来，穷举动作往下探，再回滚。没有回滚能力就没有"探完再回来"，
@@ -14,6 +14,7 @@ softlock 与 unwinnable 的判定靠协议里的 snapshot/restore：
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .env import BrowserEnv, Snapshot
@@ -174,6 +175,142 @@ def probe_deadend(env: BrowserEnv, snap: Snapshot, horizon: int = 12) -> dict[st
     return None
 
 
+CLICK_TYPES = frozenset({
+    "click", "pointerdown", "mousedown", "mouseup", "pointerup", "touchstart", "touchend",
+})
+# mouseenter/mouseover 不在里面：只接了悬停高亮、没接点击的按钮正是本判据要抓的真阳性。
+_INLINE_JS = (
+    "function(){var t=" + json.dumps(sorted(CLICK_TYPES)) + ";"
+    "for(var i=0;i<t.length;i++){if(typeof this['on'+t[i]]==='function')return true;}"
+    "return false;}"
+)
+_PARENT_JS = "function(){return this.parentNode || (this.nodeType===9 ? this.defaultView : null);}"
+# 必须用 parentNode 不是 parentElement：<html> 的 parentElement 是 null（它爹是 document，
+# 不是 Element），用 parentElement 爬会断在 html，document/window 上的委托一个都看不见。
+_AT_WINDOW_JS = "function(){return this === window;}"
+
+
+def _frame_context_id(cdp: Any, frame: Any) -> int | None:
+    """在 page 的 CDP 会话里找到承载应用那个 frame 的主世界执行上下文。
+
+    同进程 iframe 没有独立会话（new_cdp_session(frame) 会被浏览器拒绝：
+    "it is a part of the parent frame's session"），而对着 page 的默认上下文求值
+    量到的是外壳 —— 外壳上当然一个监听器都没有。所以必须显式给 contextId。
+    frame 靠 URL 认；认不唯一就返回 None，宁可报"测不到"也不量错文档。
+    """
+    stack = [cdp.send("Page.getFrameTree")["frameTree"]]
+    hits: list[str] = []
+    while stack:
+        node = stack.pop()
+        if node["frame"].get("url") == frame.url:
+            hits.append(node["frame"]["id"])
+        stack.extend(node.get("childFrames") or [])
+    if len(hits) != 1:
+        return None
+    contexts: list[dict[str, Any]] = []
+    cdp.on("Runtime.executionContextCreated", lambda e: contexts.append(e["context"]))
+    cdp.send("Runtime.enable")
+    for c in contexts:
+        aux = c.get("auxData") or {}
+        if aux.get("frameId") == hits[0] and aux.get("isDefault"):
+            return int(c["id"])
+    return None
+
+
+def _app_cdp(env: BrowserEnv) -> tuple[Any, int | None]:
+    """拿到承载应用那个 frame 的 CDP 会话，以及（必要时）它的主世界 contextId。
+
+    两种 iframe 形态都实测存在，通道正好相反：
+      跨源 OOPIF —— 真实魔搭创空间（顶层 www.modelscope.cn、内层 *.ms.show）。frame 有
+        自己的会话；page 会话的 Page.getFrameTree 里只有顶层一个节点，Runtime.enable 也只发
+        顶层的上下文 ⇒ 在 page 会话上永远解析不出它的 contextId。
+      同进程 iframe —— 本地 file:// 夹具。new_cdp_session(frame) 被浏览器拒绝
+        （"it is a part of the parent frame's session"）⇒ 只能绑 page，再显式给 contextId，
+        否则求值落在外壳上，外壳当然一个监听器都没有。
+    所以先试 frame 自己的会话，被拒再退 page+contextId。退的那支认不出唯一 frame 就抛
+    LookupError，调用方如实报"测不到"，绝不猜一个文档去量。
+    """
+    try:
+        return env._context.new_cdp_session(env.frame), None
+    except Exception:
+        pass
+    cdp = env._context.new_cdp_session(env.page)
+    ctx = _frame_context_id(cdp, env.frame)
+    if ctx is None:
+        try:
+            cdp.detach()
+        except Exception:
+            pass
+        raise LookupError("frame_context_not_resolvable")
+    return cdp, ctx
+
+
+def click_wiring(env: BrowserEnv, action: str, max_depth: int = 16) -> dict[str, Any]:
+    """问浏览器：这个控件的 click 传播链上到底有没有接监听器（含祖先容器与内联 on*）。
+
+    只读，不派发事件。判据里再点一次会让录制多出一步没被记录的动作，回放当场失真。
+    委托到父容器也算接了线：React 的 div#root、道具栏 div 上挂着整套监听器，
+    这类控件在"钱不够"这种状态下合法地什么都不做，与"没接线"在指纹上完全同形。
+
+    一路爬到 window 才算量过完整条传播链；半截链（shadow 边界、游离节点）与任何
+    CDP 失败都置 wired=None，调用方必须沉默 —— 报"测不到"，不报"这个按钮坏了"。
+    """
+    out: dict[str, Any] = {"available": False, "reason": "", "wired": None,
+                           "reached_window": False, "nodes": 0, "sites": []}
+    try:
+        cdp, ctx = _app_cdp(env)
+    except LookupError as e:
+        out["reason"] = str(e)
+        return out
+    except Exception as e:
+        out["reason"] = f"cdp_unavailable:{e}"
+        return out
+    try:
+        expr = f"window.__GSPP__ && window.__GSPP__.elementFor({json.dumps(action)})"
+        params: dict[str, Any] = {"expression": expr, "returnByValue": False}
+        if ctx is not None:
+            params["contextId"] = ctx
+        r = cdp.send("Runtime.evaluate", params)
+        oid = (r.get("result") or {}).get("objectId")
+        if not oid:
+            out["reason"] = "target_not_locatable"
+            return out
+        last = None
+        for depth in range(max_depth):
+            if not oid:
+                break
+            got = cdp.send("DOMDebugger.getEventListeners", {"objectId": oid}).get("listeners", [])
+            types = sorted({g.get("type") for g in got if g.get("type") in CLICK_TYPES})
+            inline = bool(cdp.send("Runtime.callFunctionOn", {
+                "objectId": oid, "returnByValue": True, "functionDeclaration": _INLINE_JS,
+            }).get("result", {}).get("value"))
+            out["nodes"] = depth + 1
+            if types or inline:
+                out["sites"].append({"depth": depth, "types": types, "inline": inline})
+            last = oid
+            oid = cdp.send("Runtime.callFunctionOn", {
+                "objectId": oid, "returnByValue": False, "functionDeclaration": _PARENT_JS,
+            }).get("result", {}).get("objectId")
+        if last:
+            out["reached_window"] = bool(cdp.send("Runtime.callFunctionOn", {
+                "objectId": last, "returnByValue": True, "functionDeclaration": _AT_WINDOW_JS,
+            }).get("result", {}).get("value"))
+        if not out["reached_window"]:
+            out["reason"] = "chain_incomplete"
+            return out
+        out["wired"] = bool(out["sites"])
+        out["available"] = True
+    except Exception as e:
+        out["reason"] = f"cdp_error:{e}"
+        out["wired"] = None
+    finally:
+        try:
+            cdp.detach()
+        except Exception:
+            pass
+    return out
+
+
 def check_ui_dead_end(
     env: BrowserEnv, action: str, before: Snapshot, after: Snapshot,
     ever_effective: set[str], confirm_ticks: int = 40
@@ -188,6 +325,13 @@ def check_ui_dead_end(
     同理，只判 click 不判按键：点击类游戏里方向键本来就该没反应。
     还要求本局已经有别的动作产生过效果 —— 否则可能是整个指纹都不敏感（比如游戏
     在 iframe 里），那种情况该报"测不到"，不该报"这个按钮坏了"。
+
+    🔴 最后一道：必须证明这条 click 链上**一个监听器都没有**（click_wiring）。
+    6 枚已发布主张逐条复核后全是假阳性，成立的 3 类成因都能被这道守卫止住 ——
+    双派发 click（开关被拨过去又拨回来）、指纹盲区（texts 只取前 40 个叶子、完全不读 storage）、
+    容器事件委托（监听器挂在祖先上，且该控件在当前局面是合法空操作）。
+    逐枚处置见 evidence/ledger/2026-11-08_ui_dead_end_withdrawal.json。
+    它们的共同点是"控件确实接了线，只是我们看不见它的效果"。量不到接线就沉默。
     """
     if env.mode != "dom-fallback" or not action.startswith("click:"):
         return None
@@ -200,6 +344,10 @@ def check_ui_dead_end(
     if env.read().hash != before.hash:
         return None
 
+    wiring = click_wiring(env, action)
+    if wiring["wired"] is not False:
+        return None
+
     return {
         "kind": "ui_dead_end",
         "first_seen_step": after.frame,
@@ -209,6 +357,8 @@ def check_ui_dead_end(
             "state": before.data,
             "confirmed_after_frames": confirm_ticks,
             "actions_known_effective": sorted(ever_effective),
-            "note": "该控件可见且在动作集合内，但在本局遇到的所有局面下都从未产生过任何状态变化",
+            "click_wiring": wiring,
+            "note": "该控件可见且在动作集合内，本局所有局面下都从未产生过状态变化，"
+                    "且整条 click 传播链（含祖先容器与内联 on*）上没有任何监听器",
         },
     }

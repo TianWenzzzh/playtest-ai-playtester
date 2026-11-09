@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>deadend-iframe-app-unwired</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  button { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h1>iframe 内的应用（无委托）</h1>
+<p id="status">计数 <span id="n">0</span></p>
+
+<button id="plain" aria-label="PLAIN_EFFECTIVE">EARN</button>
+<button id="dead" aria-label="TRULY_UNWIRED">NO_HANDLER</button>
+
+<!-- 没有任何 GSPP 相关代码：应用故意不接协议，走 DOM 兜底。
+     #dead 从自身到 window 整条链一个监听器都没有 —— 这是接线判据在 iframe 形态下的
+     真阳性对照，证明修好消音之后判据没有跟着一起消失。 -->
+<script>
+window.__N__ = 0;
+document.getElementById("plain").addEventListener("click", function () {
+  window.__N__++;
+  document.getElementById("n").textContent = String(window.__N__);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>deadend-limits</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  .leaf { display: inline-block; margin: 2px; }
+  button { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h1>死路判据边界夹具</h1>
+<p id="status">金币 <span id="coins">0</span></p>
+
+<!-- 没有任何 GSPP 相关代码：这一页是 DOM 兜底判据的边界夹具，故意不接协议。
+     形状取自实测的第三方作品，已去身份：控件自身没有监听器，click 挂在父容器上。
+     钱不够时点它合法地什么都不做 —— 这正是 detectors 文档串里「买钥匙」那个例子。 -->
+<div id="props">
+  <button class="prop" data-prop="hammer" aria-label="DELEGATED_INERT"><span class="cnt">3</span></button>
+</div>
+
+<button id="plain" aria-label="PLAIN_EFFECTIVE">EARN</button>
+<button id="mem" aria-label="LATE_DOM_WRITER">CLEAR_MEMORY</button>
+<button id="dead" aria-label="TRULY_UNWIRED">NO_HANDLER</button>
+
+<!-- 45 个可见叶子节点：domRead 的 texts 上限是 40，之后追加的提示语在指纹里隐形。 -->
+<div id="filler"></div>
+
+<script>
+window.__FIRES_DELEGATE__ = 0;
+window.__FIRES_MEM__ = 0;
+window.__COINS__ = 0;
+
+var filler = document.getElementById("filler");
+for (var i = 0; i < 45; i++) {
+  var s = document.createElement("span");
+  s.className = "leaf";
+  s.textContent = "F" + i;
+  filler.appendChild(s);
+}
+
+document.getElementById("props").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-prop]");
+  if (!b) return;
+  window.__FIRES_DELEGATE__++;
+  if (window.__COINS__ < 50) return;
+  window.__COINS__ -= 50;
+  document.getElementById("coins").textContent = String(window.__COINS__);
+  b.querySelector(".cnt").textContent = "2";
+});
+
+document.getElementById("plain").addEventListener("click", function () {
+  window.__COINS__++;
+  document.getElementById("coins").textContent = String(window.__COINS__);
+});
+
+// 整页真的变了（DOM 深处多一条提示 + 写 localStorage），但探针指纹逐位不变。
+document.getElementById("mem").addEventListener("click", function () {
+  window.__FIRES_MEM__++;
+  try { localStorage.setItem("fixture.memory", "{}"); } catch (_) {}
+  var t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = "MEMORY_CLEARED";
+  document.body.appendChild(t);
+});
+</script>
+</body>
+</html>

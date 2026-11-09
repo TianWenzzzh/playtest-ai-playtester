@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>toggle-sound</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  #coord { width: 240px; height: 120px; background: #dfe8ff; border: 1px solid #88a;
+           display: flex; align-items: center; justify-content: center; margin-top: 12px; }
+  button, a { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h1>开关控件夹具</h1>
+<p id="status">声音状态：开</p>
+
+<!-- 没有任何 GSPP 相关代码：这一页是 DOM 兜底判据的夹具，故意不接协议。
+     形状取自实测的两个第三方作品（已去身份）：aria-label 恒定、textContent 翻转的开关型控件，
+     以及 title 翻转的开关型控件。两者都是"接好线的开关"，不是死路。 -->
+<button id="snd" aria-label="SOUND_TOGGLE">SOUND_ON</button>
+<button id="ttl" title="VOICE_ON">VOICE_ICON</button>
+<a id="nav" href="#nav-probe">NAV_LINK</a>
+<label for="chk"><input id="chk" type="checkbox" aria-label="CHECK_BOX"> 勾选框</label>
+<button id="dead" aria-label="DEAD_CONTROL">NO_HANDLER</button>
+<div id="coord" onclick="window.__COORD_X__ = event.clientX; window.__FIRES_COORD__ = (window.__FIRES_COORD__ || 0) + 1;">COORD_PAD</div>
+
+<script>
+window.__FIRES_SND__ = 0;
+window.__FIRES_TTL__ = 0;
+window.__FIRES_NAV__ = 0;
+window.__FIRES_CHK__ = 0;
+window.__FIRES_COORD__ = 0;
+window.__COORD_X__ = -1;
+
+document.getElementById("snd").addEventListener("click", function () {
+  window.__FIRES_SND__++;
+  var on = this.textContent === "SOUND_ON";
+  this.textContent = on ? "SOUND_OFF" : "SOUND_ON";
+  this.classList.toggle("off", on);
+  document.getElementById("status").textContent = on ? "声音状态：关" : "声音状态：开";
+});
+
+document.getElementById("ttl").addEventListener("click", function () {
+  window.__FIRES_TTL__++;
+  var on = this.title === "VOICE_ON";
+  this.title = on ? "VOICE_OFF" : "VOICE_ON";
+  this.textContent = on ? "VOICE_MUTED" : "VOICE_ICON";
+});
+
+document.getElementById("nav").addEventListener("click", function () {
+  window.__FIRES_NAV__++;
+});
+
+document.getElementById("chk").addEventListener("change", function () {
+  window.__FIRES_CHK__++;
+});
+</script>
+</body>
+</html>

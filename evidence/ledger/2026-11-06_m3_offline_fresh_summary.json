@@ -67,7 +67,7 @@
         "distinct_states": 7,
         "defect": {
           "kind": "ui_dead_end",
-          "signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93"
+          "signature": "deadend:click:div:计数型展示容器@0e09d6781b93"
         },
         "pack_id": "a668e81678650103",
         "replayed": true,
@@ -79,7 +79,7 @@
         "distinct_states": 10,
         "defect": {
           "kind": "ui_dead_end",
-          "signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754"
+          "signature": "deadend:click:button:场景切换按钮@88c4557ac754"
         },
         "pack_id": "ef6b22c199b40365",
         "replayed": true,

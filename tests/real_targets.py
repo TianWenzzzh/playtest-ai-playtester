@@ -1,16 +1,19 @@
 """在真实第三方作品上跑一轮 —— M1.5 的可重跑证据。
 
-这些是魔搭创空间上的公开应用，作者不是我们，也没接我们的协议；
-出处是官方教程合集里点名的三个真实项目（modelscope.cn/learn/434687，作者 weirdfish）。
+这些是魔搭创空间上的公开应用，作者不是我们，也没接我们的协议。
+真实地址与作品名一律由本机供给（公开仓库只留不可追溯代号，
+见 evidence/corpus.json 的 redaction 注记）：PLAYTEST_REAL_URL 是允许完整探索的
+那个纯客户端小游戏，PLAYTEST_READONLY_URL_1 / _2 是只做只读探测的两个。
 默认只读探测（不派发任何动作）：其中两个会调云端模型，每点一次都消耗作者的额度，
 拿别人的额度换自己的分数这种事不做。
-只有纯客户端的那个小游戏允许完整探索。
 
 跑法：PYTHONUTF8=1 python tests/real_targets.py
+缺上述变量时判红退出，不静默跳过。
 """
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sys
 
@@ -25,11 +28,11 @@ from playtest.trace import pack_id, save_pack
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 
-# (名称, URL, 是否允许派发动作)
+# (名称, URL, 是否允许派发动作)；URL 由本机环境供给，仓库里不存真实地址。
 TARGETS = [
-    ("牛马地下城", "https://weirdfish-niuma-dungeon.ms.show/", True),
-    ("AI 共创小说", "https://weirdfish-ai-novel-studio.ms.show/", False),
-    ("上传照片变立绘", "https://weirdfish-selfie-game-portrait.ms.show/", False),
+    ("作品 A", os.environ.get("PLAYTEST_REAL_URL", ""), True),
+    ("作品 D", os.environ.get("PLAYTEST_READONLY_URL_1", ""), False),
+    ("作品 E", os.environ.get("PLAYTEST_READONLY_URL_2", ""), False),
 ]
 
 OUT = pathlib.Path(__file__).resolve().parent.parent / "out" / "real"
@@ -63,6 +66,11 @@ def inspect_only(url: str) -> dict:
 
 
 def main() -> int:
+    missing = [name for name, url, _ in TARGETS if not url]
+    if missing:
+        print("FAIL  真实作品地址未配置：" + ",".join(missing)
+              + "（未测，不能跳过后打印 PASS）")
+        return 1
     OUT.mkdir(parents=True, exist_ok=True)
     report: dict = {}
     for name, url, allow_explore in TARGETS:

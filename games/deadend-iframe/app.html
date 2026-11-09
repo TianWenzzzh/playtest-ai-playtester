@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>deadend-iframe-app</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; }
+  button { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h1>iframe 内的应用</h1>
+<p id="status">计数 <span id="n">0</span></p>
+
+<button id="plain" aria-label="PLAIN_EFFECTIVE">EARN</button>
+<button id="doc" aria-label="DOC_DELEGATE">DOC_ONLY</button>
+<button id="dead" aria-label="TRULY_UNWIRED">NO_HANDLER</button>
+
+<!-- 没有任何 GSPP 相关代码：应用故意不接协议，走 DOM 兜底。
+     三个控件覆盖三种真相：真有效 / 接了线但本状态下不改指纹 / 整条链一个监听器都没有。 -->
+<script>
+window.__FIRES_DOC__ = 0;
+window.__N__ = 0;
+
+document.getElementById("plain").addEventListener("click", function () {
+  window.__N__++;
+  document.getElementById("n").textContent = String(window.__N__);
+});
+
+document.addEventListener("click", function (e) {
+  if (e.target.id !== "doc") return;
+  window.__FIRES_DOC__++;
+});
+</script>
+</body>
+</html>

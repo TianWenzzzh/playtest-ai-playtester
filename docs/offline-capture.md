@@ -16,8 +16,9 @@
 ⚠️ 但别把这句话当天花板用。实测：真实第三方作品上曾经停在 `async_dependent` 的包，
 在**取包离线之后**并没有立刻变绿——原因是回放路径和录制路径不一致（第 6 节）。
 对齐之后曾取得单次 `replayed=true`（23/23）；🔴 但后来在同一份输入 HAR 上各重放三遍，
-23 步那枚第一遍在第 18 步分叉 ⇒ 它现在记 `async_dependent`（当前 6 枚读数见
-`evidence/corpus.json` 与 §5.5）。26 步那枚属 11-05 旧快照，20/26 → 20/26 → 21/26
+23 步那枚第一遍在第 18 步分叉 ⇒ 它现在记 `async_dependent`（🔴 11-08 撤回后台账剩 3 枚：
+2 枚 `bit_reproducible` ＋ 1 枚 `async_dependent`，现读 `evidence/corpus.json` 与 §5.5）。
+26 步那枚属 11-05 旧快照，20/26 → 20/26 → 21/26
 **分歧点自己会移动**，跨快照包身份不同，只作历史。
 "复现不出来"先怀疑仪器，再宣称原理。
 
@@ -84,10 +85,16 @@ playtest capture https://someone.ms.show/ --har someone.har --top-up
   并且只在真有在途工作时才睡一小段真实时间（`settle_poll_ms`，夹具零成本）。
   改后读数（**绑输入快照**，跨快照不可互借）：11-05 那份快照的两枚包各连重放三遍都
   `bit_reproducible`、`mismatch=null`，且同一 seed 连录两遍的动作序列逐值一致
-  （`tests/m3_offline.py` 16/16）。🔴 11-06 换了一份 HAR 重取后，`tools/replay_repeat.py`
-  把台账引用的 6 枚包各重放三遍：**5 枚逐值一致，牛马地下城 23 步那枚
-  （`ef6b22c199b40365`）第一遍在第 18 步 `click:button:开始冒险` 分叉 ⇒ 如实降格
+  （仓内等价判据现跑 `PYTHONUTF8=1 python tests/m3_offline.py`）。🔴 11-06 换了一份 HAR 重取后，
+  `tools/replay_repeat.py` 把当时台账引用的 6 枚包各重放三遍：**5 枚逐值一致，作品 A（脱敏代号） 23 步那枚
+  （`ef6b22c199b40365`）第一遍在第 18 步 `click:button:场景切换按钮` 分叉 ⇒ 如实降格
   `async_dependent`** —— 这条是**未闭合的能力缺口**，不是已经解决。
+  🔴 **11-08 再更正**：上面那批三遍读数出自双派发 click 修复**之前**的探针。修好之后，
+  其中 3 枚（作品 B（脱敏代号） 5 步 / 作品 C（脱敏代号） 2 步 / 作品 C（脱敏代号） 3 步）在开关控件那一步确定性失配 ⇒ 按纪律从台账移除，
+  不记 `async_dependent`（失配是仪器版本绑定，不是游戏的异步）。台账现存 3 枚：
+  2 枚 `bit_reproducible` ＋ 1 枚 `async_dependent`（作品 A（脱敏代号） 23 步那枚原级保留 ——
+  今天重测虽逐值一致，但**换了输入 ⇒ 今天的绿不许升昨天的级**）。
+  逐枚处置见 `evidence/ledger/2026-11-08_ui_dead_end_withdrawal.json`。
   🔴 **归因未闭合，别把"解码漏进指纹"当结论**：三遍的 `wall_ms`（3790 / 3865 / 3604）
   与是否分叉不相关，所以它只是假设之一；另一条更便宜的假设是 `replay()` 的存档注入分支
   （`playtest/trace.py:95` 用"装回存档后哈希变没变"决定要不要 `reboot`，而 `storage_injected`

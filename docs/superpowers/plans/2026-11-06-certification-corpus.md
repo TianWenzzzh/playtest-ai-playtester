@@ -272,22 +272,22 @@ Create `evidence/corpus.json` with this measured entry, preserving these exact h
   "scope": "local_operational_ledger",
   "games": [
     {
-      "id": "niuma-dungeon",
-      "title": "牛马地下城",
-      "source_url": "https://weirdfish-niuma-dungeon.ms.show/",
-      "author": {"name": "weirdfish"},
+      "id": "work-a",
+      "title": "作品 A（脱敏代号）",
+      "source_url": "https://work-a.invalid/",
+      "author": {"name": "author-a"},
       "ownership": "third_party",
       "permissions": {"exploration": "public_client_only", "publish_report": "not_requested"},
       "defects": [
         {
           "kind": "ui_dead_end",
-          "signature": "deadend:click:div:6 需求便利贴 30 / 30 0 小改一下 造成 6 伤害 机制 · 需求爆发@0e09d6781b93",
+          "signature": "deadend:click:div:计数型展示容器@0e09d6781b93",
           "evidence": "../raw/audit/2026-11-06_m3_offline_fresh_summary.json",
           "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
         },
         {
           "kind": "ui_dead_end",
-          "signature": "deadend:click:button:Boss 战 无尽改稿甲方 · 加急验收，尚未抵达，查看详情@88c4557ac754",
+          "signature": "deadend:click:button:场景切换按钮@88c4557ac754",
           "evidence": "../raw/audit/2026-11-06_m3_offline_fresh_summary.json",
           "evidence_sha256": "ffd3faf47d9de527448f01acd13d31ed7b38c1701bd597aa51317c7058448358"
         }

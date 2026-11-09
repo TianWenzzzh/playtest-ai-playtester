@@ -5,11 +5,14 @@
 这里量的就是当前这份快照的：输入字节哈希 + 每一遍的逐帧比对结果。
 
 跑法（工作目录 = 仓库根）：
-  PYTHONUTF8=1 python tools/replay_repeat.py --har out/offline/ycxxl.har \
-      --id ycxxl --title 优宠消消乐 \
-      --pack out/offline/ycxxl-packs/curiosity-20261105-25dc2578c3197948.json \
-      --pack out/offline/ycxxl-packs/curiosity-20261106-0aaf2d192c4051ad.json \
-      --reps 3 --out out/repeat/ycxxl_repeat3.json
+  PYTHONUTF8=1 python tools/replay_repeat.py --har out/offline/work-b.har \
+      --id work-b \
+      --pack out/offline/work-b-packs/curiosity-20261105-25dc2578c3197948.json \
+      --pack out/offline/work-b-packs/curiosity-20261106-0aaf2d192c4051ad.json \
+      --reps 3 --out out/repeat/work-b_repeat3.json
+
+上面示例里的 `out/` 路径与 `--id` 都是**本机产物**：第三方 HAR 与复现包不随仓库分发，
+作品身份在公开台账里只有代号（`work-b` 等），真实地址与原始文件名由使用者本地供给。
 
 退出码：0 = 每一枚包每一遍都 replayed=true 且逐值一致；1 = 有任何一遍不一致（如实报，不放宽）。
 """

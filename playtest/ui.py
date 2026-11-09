@@ -140,11 +140,22 @@ def _static_evidence() -> str:
             f"{len(game.get('replays') or [])} 条复现记录 | `{levels}` | 作者确认：`{confirmation}` |"
         )
     body = ("\n".join(rows) if rows else "| 暂无 | 0 条缺陷 | 0 条复现记录 | — | — |")
+    # 撤回之后表里是「0 条缺陷」。不披露撤回，读者会把它读成「没测出东西」——
+    # 那是用省略造成的假印象。计数与指针都从台账现取，台账没有撤回块就不多说一句。
+    wd = corpus.get("withdrawal") or {}
+    disclosure = ""
+    if wd.get("ledger"):
+        disclosure = (
+            f"\n\n🔴 {wd.get('claims_withdrawn', 0)} 条已公开主张全部撤回"
+            "（复核判定为仪器假阳性，不是游戏缺陷）；逐枚成因、证据形态与仪器修复见 "
+            f"`{wd['ledger']}`。表内计数是撤回后的现读。"
+        )
     return (
         "### 本地封存证据（不是本次实时运行）\n\n"
         "以下来自 `evidence/corpus.json` 的封存台账；它证明对应留档，不代表公开验收或作者确认。\n\n"
         "| 外部作品 | 已留档发现 | 已留档回放 | 复现等级 | 证据边界 |\n|---|---:|---:|---|---|\n"
         + body
+        + disclosure
     )
 
 
@@ -325,7 +336,7 @@ def build() -> gr.Blocks:
                 "| `invariant_violation` | 作者声明的不变量被违反 | `invariants()` |\n"
                 "| `softlock` | horizon 内到不了任何终局：赢不了也死不掉 | `snapshot/restore` + `key` |\n"
                 "| `unwinnable` | 可达终局全为失败 | 同上 |\n"
-                "| `ui_dead_end` | 控件可见可点，派发后指纹不变（含 40 帧二次确认） | 兜底模式 |\n\n"
+                "| `ui_dead_end` | 控件可见可点，派发后指纹不变（含 40 帧二次确认），且整条 click 链上量不到监听器 | 兜底模式 |\n\n"
                 "🔴 探测被 horizon 或预算截断时**只报『该深度内未找到』，不断言『不存在赢的路径』**。\n\n"
                 "## 完整跑法\n"
                 "```bash\npython -m playtest.cli scan games/maze-exit --seeds 20261105\n"

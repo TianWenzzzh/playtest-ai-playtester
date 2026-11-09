@@ -188,7 +188,7 @@ def run_sequence(
 def static_evidence_needles() -> list[str]:
     corpus = json.loads((ROOT / "evidence" / "corpus.json").read_text(encoding="utf-8"))
     game = corpus["games"][0]
-    return [
+    needles = [
         "封存证据",
         "不是本次实时运行",
         str(game["title"]),
@@ -196,6 +196,13 @@ def static_evidence_needles() -> list[str]:
         f"{len(game['replays'])} 条复现记录",
         "作者确认：not_requested",
     ]
+    # 撤回之后表里是「0 条缺陷」。不披露撤回，读者会把它读成「没测出东西」——
+    # 那是用省略造成的假印象。计数与指针都从台账现取，不钉字面量。
+    wd = corpus.get("withdrawal") or {}
+    if wd.get("ledger"):
+        needles.append(f"{wd['claims_withdrawn']} 条已公开主张全部撤回")
+        needles.append(wd["ledger"])
+    return needles
 
 
 def main() -> int:

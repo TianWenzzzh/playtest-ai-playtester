@@ -144,7 +144,7 @@ DGX Spark（arm64, GB10）
 | 启动时间（冷 / 热） | 未测 | `___ / ___ s` | 冷启动含模型加载 ⇒ 需端点 |
 | 资源回收 | 已实现：浏览器实例进程内共享、`shutdown_browser()` + `atexit`、崩溃后 `is_connected()` 判死重建 | 模型按需加载/卸载 + 日志滚动 | 🔴 模型侧卸载**未实现**（我们没有常驻模型） |
 | **离线能力** | ✅ **已实测**：真实第三方作品取成 `.har` 后零回源跑通 —— 未命中 **0**、命中 **561 全在 exact 档**、全程不消耗作者额度 | 断网完成生成与验证 | `playtest.cli capture` + `--har`；判据在 `tests/m3_offline.py` |
-| 复现等级（本工具自己的指标） | 🔴 **不是每枚都位级复现**：牛马地下城 23 步那枚在同一份输入 HAR 上重放三遍，第一遍在第 18 步（场景切换）分叉 ⇒ 如实记 `async_dependent`；其余各枚三遍逐值一致。逐枚等级与计数**现读台账，不在此抄** | 同 | `evidence/corpus.json` + `evidence/ledger/*_repeat3.json`（`tools/corpus.py` 现校验） |
+| 复现等级（本工具自己的指标） | 🔴 **不是每枚都位级复现**：作品 A（脱敏代号） 23 步那枚在同一份输入 HAR 上重放三遍，第一遍在第 18 步（场景切换）分叉 ⇒ 如实记 `async_dependent`；其余各枚三遍逐值一致。逐枚等级与计数**现读台账，不在此抄** | 同 | `evidence/corpus.json` + `evidence/ledger/*_repeat3.json`（`tools/corpus.py` 现校验） |
 | 渲染后端 | 🔴 **SwiftShader 软件渲染**：`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)` | 现读同一字段 | `window.__GSPP__.render()`；**这条决定 WebGL 类指纹能不能跨机背书**，拿到节点第一件事就是读它 |
 
 **为什么"离线能力"这一行值得单独摆出来**：如果核心推理全走云端 API，这台机器就是多余的。

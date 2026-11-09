@@ -125,7 +125,7 @@ canvas 降采样像素指纹推断状态；从可交互元素 + 常用键集推�
 | `invariant_violation` | 作者声明的不变量被违反 | `invariants()` |
 | `softlock` |  horizon 步内到不了任何终局：赢不了也死不掉 | `snapshot/restore` |
 | `unwinnable` | 可达终局全为失败：这局面已经不可能通关 | `snapshot/restore` |
-| `ui_dead_end` | 控件可见可点，派发后状态指纹纹丝不动（含 40 帧二次确认） | 兜底模式 |
+| `ui_dead_end` | 控件可见可点，派发后状态指纹纹丝不动（含 40 帧二次确认），**且整条 click 传播链上量不到任何监听器** | 兜底模式 |
 
 🔴 `horizon` 是启发式代价，代码里如实暴露：探测被截断时**只报"该深度内未找到"，
 不断言"不存在赢的路径"**。
@@ -189,7 +189,17 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
 
 `games/vault-run/` 把两件事叠在一起：缺陷在搜索视界之外（必须真把游戏打上去），
 而打上去要求连续读懂中文线索（随机撞中概率约 1e-8）。
-⇒ 从此 `random`/`curiosity` 必然 0，能读语义的策略才有分。LLM 臂有了可测的靶。
+⇒ 从此 `random`/`curiosity` 必然 0，能读语义的策略才有分。
+
+🔴 **这个靶已经打过了，结果是负的，如实写在这里**：配上真模型端点后，`llm` 与 `llm_memory`
+两臂在 `vault-run` 上都是 **0/3**，而 45 词条的 `clue` 词表基线 **3/3**，`inconclusive_count=0`
+（不是"端点没通所以没测"）。归因：`LLMPolicy.SYSTEM_PROMPT` 的目标是"暴露缺陷、优先去没见过的状态"，
+与 `clue` 专门的爬塔目标不同 ⇒ 模型早死，走不到第 17 层那枚封存缺陷。
+夹具还有天花板：`clue` 已经 3/3，所以它至多能证 LLM **打平**、永远证不出**优于**。
+**不改产品提示词去凑赢。** 本地现跑 `python -m benchmark.run`，读数落 `out/benchmark.json`
+（已 gitignore，由 `benchmark/run.py` 生成）；本机 `llm_available=false` 时 llm 两列等价 curiosity，
+真端点那次读数不在这份文件里。已验证的 AI 增量在**模型生成补丁腿**
+（发现→补丁→同包复验→回归，界面上如实标 `模型生成`），不在试玩爬塔臂。
 
 
 ---
@@ -224,13 +234,22 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
    另一枚 26 步包 `20/26 → 20/26 → 21/26` —— **分歧点自己会移动**，那枚如实记 `async_dependent`。
    现在的静息条件是三条同时成立：**两次哈希相同 · 没有在途图片解码 · 资源条目数不再增长**，
    并且只在真有在途工作时才睡一小段真实时间（夹具零成本）。
-   改后读数**按枚分开、且绑输入快照**（`tools/replay_repeat.py` 在同一份 HAR 上把 6 枚包各重放三遍，
+   改后读数**按枚分开、且绑输入快照**（`tools/replay_repeat.py` 在同一份 HAR 上把当时台账里的 6 枚包各重放三遍，
    逐遍读数与 `offline_har_sha256` 一起存进 `evidence/ledger/*_repeat3.json`，`tools/corpus.py` 现校验）：
-   **5 枚三遍逐值一致**（牛马 20 步 / 优宠 3、5 步 / 千门 3、2 步）；
-   🔴 **牛马地下城 23 步那枚（`ef6b22c199b40365`）三遍里第一遍在第 18 步
-   `click:button:开始冒险` 分叉（18/23），后两遍 23/23** ⇒ 如实降格 `async_dependent`，
+   当时 **5 枚三遍逐值一致**（作品 A 20 步 / 作品 B 3、5 步 / 作品 C 3、2 步）；
+   🔴 **11-08 撤回后这份读数已被取代**：那批三遍读数出自双派发 click 修复**之前**的探针；
+   修好之后其中 3 枚（作品 B（脱敏代号） 5 步 / 作品 C（脱敏代号） 2 步 / 作品 C（脱敏代号） 3 步）在开关控件那一步**确定性失配**，
+   按纪律从台账移除而不是降格记 `async_dependent`（失配绑定的是仪器版本，不是游戏的异步）。
+   台账现存 **3 枚**：**2 枚 `bit_reproducible`**（作品 B（脱敏代号） 3 步 / 作品 A（脱敏代号） 20 步）
+   ＋ **1 枚 `async_dependent`**（作品 A（脱敏代号） 23 步）。
+   逐枚处置与成因见 `evidence/ledger/2026-11-08_ui_dead_end_withdrawal.json`；
+   冻结的 `*_repeat3.json` 仍是那次测量的原始留痕：读数、定级、输入哈希、@指纹哈希一律未动，
+   只把作品名/作者 handle/来源 URL 换成代号、游戏内 UI 标签原文换成不可搜索的角色描述（保留前缀与 @指纹；脱敏前逐字节原件与 sha 清单
+   留在开发工作区，不随仓库分发、公开 clone 里拿不到）。
+   🔴 **作品 A（脱敏代号） 23 步那枚（`ef6b22c199b40365`）三遍里第一遍在第 18 步
+   `click:button:场景切换按钮` 分叉（18/23），后两遍 23/23** ⇒ 如实降格 `async_dependent`，
    不写成"能复现"。分叉动作是场景切换，但**归因未闭合**：三遍的 `wall_ms`
-   （3790 / 3865 / 3604，见 `evidence/ledger/niuma_repeat3.json`）与是否分叉不相关，
+   （3790 / 3865 / 3604，见 `evidence/ledger/work-a_repeat3.json`）与是否分叉不相关，
    所以"解码逃得出静息判据"只是假设之一；另一条更便宜的假设是 `replay()` 的存档注入分支
    （`storage_injected` 至今没被记进 ledger，而历史上同位置分叉的真因正是回放多推了一段帧）。
    先做字段级诊断，再谈改判据。
@@ -242,7 +261,7 @@ python -m playtest.cli scan "games/blocky-jump?maxgap=3" --seeds 20261105,202611
    真因是回放路径与录制路径不一致（多推一段帧 / 没按包里记录的帧时间线补齐）。
    这两处修好后曾取得**单次**回放 23/23；🔴 但"三次重放都全等"这句已被第 7 条的三遍读数否证，
    不许再写。26 步那枚属 11-05 旧快照，跨快照包身份不同，只作历史。
-   判据要求的是"≥1 枚可复现"，当前由另外 5 枚三遍逐值一致成立；
+   判据要求的是"≥1 枚可复现"，当前由台账里另外 2 枚 `bit_reproducible`（作品 B（脱敏代号） 3 步 / 作品 A（脱敏代号） 20 步）成立；
    "真实作品的位级复现已全部解决"这句更大的话不成立。见 `docs/offline-capture.md` §5.5。
 
 ---
@@ -331,3 +350,12 @@ MIT。
 素材与依赖授权清单见 [`ASSETS.md`](ASSETS.md)：四个夹具的画面全部由代码画（Canvas 2D / CSS 几何 / Unicode），
 仓库里**没有任何图片、音频、字体、模型文件**，也没有 CDN 外链 —— 那几条都配了可现读的验证命令。
 离线取包录出的 `.har` 里确实含第三方应用的响应字节，因此它落在 `out/`（已 gitignore）且从不随仓库分发。
+
+第三方作品的**名字、作者 handle、来源 URL 在当前 checkout 里不随台账分发**：`evidence/corpus.json` 里
+一律是不可追溯代号（`work-a` / `work-b` / `work-c`，`source_url` 用 RFC 2606 保留域 `.invalid`，
+故意不可解析，不冒充真来源），台账自带 `redaction` 注记说明这件事。
+🔴 **脱敏只覆盖当前 checkout，不覆盖 git 历史**：脱敏前的提交（身份命名台账、游戏内 UI 原文、真实来源 URL）仍留在历史里，完整 `git clone` 会一并拉到；本仓未重写历史，故不主张「完全不可追溯／公开面无残留」。要彻底清除需 `git filter-repo` 重写历史＋force-push（破坏性，未做）。
+⇒ 代价要说清：**新 clone 下来跑不了那条真实第三方离线臂**，除非使用者自己在本地供给
+`PLAYTEST_REAL_URL`（`tests/m3_offline.py`）与 `PLAYTEST_READONLY_URL_1/_2`（`tests/real_targets.py`）；
+缺变量时那两个脚本判红退出，不静默跳过打印 PASS。脱敏判据由 `tests/m5_corpus.py` 第 7 段守着
+（分布式面零命中 + 正负对照），跑 `PYTHONUTF8=1 python tests/m5_corpus.py` 现验。

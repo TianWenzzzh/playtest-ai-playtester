@@ -1,9 +1,9 @@
 {
   "schema": "playtest-offline-evidence/1",
   "game": {
-    "id": "qianmen-ai-liar",
-    "title": "千门 · AI 千王擂台",
-    "source_url": "https://zhijiejj-qianmen-ai-liar.ms.show/"
+    "id": "work-c",
+    "title": "作品 C（脱敏代号）",
+    "source_url": "https://work-c.invalid/"
   },
   "scope": "public_client_only_offline_replay",
   "offline_har_sha256": "b197c4b36de0c770c4aaca4c0a6c7284499a068b46e4da2f0f28faff9977c79d",
@@ -16,7 +16,7 @@
       "recorded_at": "2026-11-06T19:17:34+0800",
       "defect": {
         "kind": "ui_dead_end",
-        "signature": "deadend:click:button:气泡语音：开@b282a1262875"
+        "signature": "deadend:click:button:开关型控件@b282a1262875"
       },
       "scan_replayed": true,
       "independent_replay": {
@@ -24,9 +24,9 @@
           "-m",
           "playtest.cli",
           "replay",
-          "out\\offline\\qianmen-packs\\curiosity-20261105-d3905699adb62460.json",
+          "out\\offline\\work-c-packs\\curiosity-20261105-d3905699adb62460.json",
           "--har",
-          "out/offline/qianmen.har"
+          "out/offline/work-c.har"
         ],
         "rc": 0,
         "replayed": true,
@@ -50,7 +50,7 @@
       "recorded_at": "2026-11-06T19:17:36+0800",
       "defect": {
         "kind": "ui_dead_end",
-        "signature": "deadend:click:button:气泡语音：开@6c4b9bf90550"
+        "signature": "deadend:click:button:开关型控件@6c4b9bf90550"
       },
       "scan_replayed": true,
       "independent_replay": {
@@ -58,9 +58,9 @@
           "-m",
           "playtest.cli",
           "replay",
-          "out\\offline\\qianmen-packs\\curiosity-20261106-733c63124471c605.json",
+          "out\\offline\\work-c-packs\\curiosity-20261106-733c63124471c605.json",
           "--har",
-          "out/offline/qianmen.har"
+          "out/offline/work-c.har"
         ],
         "rc": 0,
         "replayed": true,

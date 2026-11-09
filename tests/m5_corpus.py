@@ -62,6 +62,85 @@ def game(log: pathlib.Path) -> dict:
     }
 
 
+# 第三方身份脱敏判据。needle 取最短形式（长 slug 含短 handle，列全会重复计数）。
+# 🔴 本文件自身必须排除：needle 表就写在这里，不排除则永远自我命中。
+DEID_NEEDLES = (
+    "niuma", "ycxxl", "qianmen", "weirdfish", "fshanfeng", "zhijiejj",
+    "牛马", "优宠", "千门", "AI 共创小说", "上传照片变立绘",
+    "lamou", "rain-gallery",
+)
+DEID_SKIP_DIRS = {".git", ".venv", "out", "__pycache__", "dist", "build",
+                  ".pytest_cache", "node_modules", "runs"}
+# 凭据件一律不读不扫：FAIL 详情只打 file:line:needle，但读进来本身就越界了。
+DEID_SKIP_NAMES = {"secrets.env", ".env", "auth.json", "latest.json"}
+DEID_TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".html", ".css", ".txt",
+                      ".toml", ".yml", ".yaml", ".sh", ".cfg"}
+DEID_SELF = pathlib.Path(__file__).resolve()
+
+
+def deid_face_files(root: pathlib.Path) -> list[pathlib.Path]:
+    """分布式面 = 仓内文本件，剪掉 gitignored 目录与凭据件。"""
+    face: list[pathlib.Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in DEID_SKIP_DIRS]
+        for name in filenames:
+            p = pathlib.Path(dirpath) / name
+            if p.resolve() == DEID_SELF or name in DEID_SKIP_NAMES:
+                continue
+            if any(s in name.lower() for s in ("secret", "token", "credential")):
+                continue
+            if p.suffix.lower() in DEID_TEXT_SUFFIXES:
+                face.append(p)
+    return sorted(face)
+
+
+def deid_hits(root: pathlib.Path) -> list[tuple[str, int, str]]:
+    hits: list[tuple[str, int, str]] = []
+    for p in deid_face_files(root):
+        try:
+            text = p.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for i, line in enumerate(text.split("\n"), 1):
+            for needle in DEID_NEEDLES:
+                if needle in line:
+                    hits.append((p.relative_to(root).as_posix(), i, needle))
+    return hits
+
+
+def deid_checks() -> None:
+    print("\n== 7. 第三方身份脱敏：分布式面零命中 ==")
+    face = deid_face_files(ROOT)
+    # 尺子量不到面时"零命中"是假绿，所以面本身要有下限。
+    check("脱敏尺量到了分布式面", len(face) >= 40, f"files={len(face)}")
+    hits = deid_hits(ROOT)
+    check("分布式面不含第三方作品名/作者 handle/身份 slug", not hits,
+          f"hits={len(hits)} {hits[:6]}")
+
+    corpus = json.loads((ROOT / "evidence" / "corpus.json").read_bytes())
+    games = corpus.get("games") or []
+    ids = [g.get("id") for g in games]
+    check("语料 id 全是不可追溯代号", ids == ["work-a", "work-b", "work-c"], str(ids))
+    urls = [g.get("source_url", "") for g in games]
+    check("source_url 用 RFC2606 保留域（故意不可解析，不冒充真来源）",
+          bool(urls) and all(u.startswith("https://") and u.split("/")[2].endswith(".invalid")
+                             for u in urls), str(urls))
+    redaction = corpus.get("redaction")
+    check("台账自带脱敏注记（不是静默改写）",
+          isinstance(redaction, dict) and bool(redaction.get("note")),
+          str(sorted(redaction)) if isinstance(redaction, dict) else "missing")
+
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        f = root / "face.md"
+        f.write_text("代号作品 A 的一行\n", encoding="utf-8")
+        check("脱敏尺正对照：干净面零命中", deid_hits(root) == [], "")
+        f.write_text("代号一行\n" + DEID_NEEDLES[0] + "\n", encoding="utf-8")
+        got = deid_hits(root)
+        check("脱敏尺负控：植入身份串必须开火且只点名那一处",
+              len(got) == 1 and got[0][2] == DEID_NEEDLES[0] and got[0][1] == 2, str(got))
+
+
 def main() -> int:
     print("\n== 1. 正向：字段齐全且证据哈希匹配 ==")
     with tempfile.TemporaryDirectory() as td:
@@ -335,6 +414,8 @@ def main() -> int:
         path.write_text(json.dumps(data), encoding="utf-8")
         errors = validate_corpus(root, path)
         check("evidence without pack_sha256 stays silent", errors == [], str(errors[:1])[:160])
+
+    deid_checks()
 
     failed = [r for r in RESULTS if not r[1]]
     print(f"\n{'=' * 46}\n{len(RESULTS) - len(failed)}/{len(RESULTS)} PASS")

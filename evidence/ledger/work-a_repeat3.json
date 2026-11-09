@@ -1,55 +1,55 @@
 {
   "schema": "playtest-offline-evidence/2",
   "game": {
-    "id": "ycxxl",
-    "title": "优宠消消乐",
-    "source_url": "https://fshanfeng-ycxxl.ms.show/"
+    "id": "work-a",
+    "title": "作品 A（脱敏代号）",
+    "source_url": "https://work-a.invalid/"
   },
   "scope": "public_client_only_offline_replay",
-  "offline_har_sha256": "30d01c8feebf8b105236826a8b345715f7bf66ea36452956d841af6c8b66d05d",
+  "offline_har_sha256": "f0711cf280691751decc54891ee460b84547c03ded875c6151bfb51773839fd2",
   "repetitions_requested": 3,
-  "recorded_at": "2026-11-06T20:22:50+0800",
+  "recorded_at": "2026-11-06T20:23:13+0800",
   "episodes": [
     {
       "seed": 20261105,
-      "pack_id": "25dc2578c3197948",
-      "pack_sha256": "84054a0f7b2646b3f88f9447b1ead2495f150382405a7852693f8b90657161fe",
-      "steps": 3,
+      "pack_id": "a668e81678650103",
+      "pack_sha256": "3bbf648775b3a75fcdb0db83301c9ee97819135d9699e63f89840c73ed86e6f6",
+      "steps": 20,
       "defect_kind": "ui_dead_end",
-      "defect_signature": "deadend:click:button:🔨 3@f61a8ad49758",
+      "defect_signature": "deadend:click:div:计数型展示容器@0e09d6781b93",
       "runs": [
         {
           "rc": 0,
           "replayed": true,
           "initial_hash_matched": true,
-          "steps_matched": 3,
-          "steps_total": 3,
+          "steps_matched": 20,
+          "steps_total": 20,
           "hashes_match": true,
           "mismatch": null,
           "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 3045
+          "wall_ms": 3925
         },
         {
           "rc": 0,
           "replayed": true,
           "initial_hash_matched": true,
-          "steps_matched": 3,
-          "steps_total": 3,
+          "steps_matched": 20,
+          "steps_total": 20,
           "hashes_match": true,
           "mismatch": null,
           "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 2997
+          "wall_ms": 3656
         },
         {
           "rc": 0,
           "replayed": true,
           "initial_hash_matched": true,
-          "steps_matched": 3,
-          "steps_total": 3,
+          "steps_matched": 20,
+          "steps_total": 20,
           "hashes_match": true,
           "mismatch": null,
           "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 3043
+          "wall_ms": 3636
         }
       ],
       "all_runs_replayed": true,
@@ -58,49 +58,54 @@
     },
     {
       "seed": 20261106,
-      "pack_id": "0aaf2d192c4051ad",
-      "pack_sha256": "fc51a7c85427109f1dd5f2fdfc7f06c9307bb5ef390b4ffd7dbda4e65bb0a87b",
-      "steps": 5,
+      "pack_id": "ef6b22c199b40365",
+      "pack_sha256": "5bb9dcf519da21821282dab234b43d648cfddcbf87cf666042570b8261d0d7d5",
+      "steps": 23,
       "defect_kind": "ui_dead_end",
-      "defect_signature": "deadend:click:button:音效开关@d358a97d4de5",
+      "defect_signature": "deadend:click:button:场景切换按钮@88c4557ac754",
       "runs": [
         {
-          "rc": 0,
-          "replayed": true,
+          "rc": 1,
+          "replayed": false,
           "initial_hash_matched": true,
-          "steps_matched": 5,
-          "steps_total": 5,
-          "hashes_match": true,
-          "mismatch": null,
-          "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 2895
+          "steps_matched": 18,
+          "steps_total": 23,
+          "hashes_match": false,
+          "mismatch": {
+            "i": 18,
+            "action": "click:button:场景切换按钮",
+            "expected": "sha256:a81bdf8c67dac50c3c386a0558ca84abb2b033f8b0cf2939fabf3aa552eb1ead",
+            "actual": "sha256:d4dc5115ed54d8214c04e21401de1b7ef62b2c21f0d85a9b495a11362c396ab1"
+          },
+          "stderr_tail": "复现包无效：存在哈希不一致，见 mismatch",
+          "wall_ms": 3790
         },
         {
           "rc": 0,
           "replayed": true,
           "initial_hash_matched": true,
-          "steps_matched": 5,
-          "steps_total": 5,
+          "steps_matched": 23,
+          "steps_total": 23,
           "hashes_match": true,
           "mismatch": null,
           "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 2831
+          "wall_ms": 3865
         },
         {
           "rc": 0,
           "replayed": true,
           "initial_hash_matched": true,
-          "steps_matched": 5,
-          "steps_total": 5,
+          "steps_matched": 23,
+          "steps_total": 23,
           "hashes_match": true,
           "mismatch": null,
           "stderr_tail": "复现包有效：初始状态与全部动作帧哈希一致",
-          "wall_ms": 2953
+          "wall_ms": 3604
         }
       ],
-      "all_runs_replayed": true,
-      "per_run_readings_identical": true,
-      "level": "bit_reproducible"
+      "all_runs_replayed": false,
+      "per_run_readings_identical": false,
+      "level": "async_dependent"
     }
   ],
   "field_caliber": {
