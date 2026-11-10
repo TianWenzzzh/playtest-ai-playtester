@@ -108,6 +108,82 @@ check("真夹具那一次仍然判绿（说明新布尔没被写死成恒红）"
 check("真夹具的回归读数干净", res.regression["defects"] == {} and res.regression["errors"] == 0,
       json.dumps(res.regression, ensure_ascii=False))
 
+print("== 6. 复现包 ingestion 结构校验：坏包干净拒绝，真实合法包仍接受 ==")
+# 起因（真实崩溃面，不是设想）：load_pack 是裸 json.loads，do_replay 随后读
+# pack["game"]["url"] ⇒ 语法合法但缺 game 键的 JSON 会 KeyError 崩，不是干净拒绝。
+# 负控夹具一律从 §0 那枚真实开火的包派生（删一键/改一处类型），正对照就是它本身。
+import copy
+
+SCHEMA_WORK = WORK / "schema"
+SCHEMA_WORK.mkdir(parents=True, exist_ok=True)
+
+
+def _expect_clean_reject(label: str, bad: dict) -> None:
+    p = SCHEMA_WORK / "bad.json"
+    save_pack(bad, p)
+    try:
+        load_pack(p)
+        check(label, False, "竟然接受了坏包（ingestion 无结构校验）")
+    except ValueError as e:
+        check(label, True, str(e)[:80])
+    except Exception as e:
+        check(label, False, f"崩成 {type(e).__name__} 而非干净拒绝：{e}")
+
+
+def _mutate(fn) -> dict:
+    bad = copy.deepcopy(pack)
+    fn(bad)
+    return bad
+
+
+_expect_clean_reject("缺 game 键被干净拒绝", _mutate(lambda b: b.pop("game")))
+_expect_clean_reject("缺 initial_state.seed 被干净拒绝", _mutate(lambda b: b["initial_state"].pop("seed")))
+_expect_clean_reject("缺 initial_state.hash 被干净拒绝", _mutate(lambda b: b["initial_state"].pop("hash")))
+_expect_clean_reject("缺 actions 被干净拒绝", _mutate(lambda b: b.pop("actions")))
+_expect_clean_reject("缺 defect.signature 被干净拒绝", _mutate(lambda b: b["defect"].pop("signature")))
+_expect_clean_reject("game 类型错（非 dict）被干净拒绝", _mutate(lambda b: b.__setitem__("game", "not-a-dict")))
+_expect_clean_reject("actions 类型错（非 list）被干净拒绝", _mutate(lambda b: b.__setitem__("actions", {})))
+_expect_clean_reject("空 actions 被干净拒绝", _mutate(lambda b: b.__setitem__("actions", [])))
+_expect_clean_reject("seed 类型错（非 int）被干净拒绝", _mutate(lambda b: b["initial_state"].__setitem__("seed", "20261105")))
+_expect_clean_reject("action 项缺 hash_after 被干净拒绝", _mutate(lambda b: b["actions"][0].pop("hash_after")))
+
+good = SCHEMA_WORK / "good.json"
+save_pack(pack, good)
+try:
+    loaded = load_pack(good)
+    check("真实合法包仍被接受（正对照，防恒红把合法包也拒了）", loaded == pack)
+except Exception as e:
+    check("真实合法包仍被接受（正对照，防恒红把合法包也拒了）", False, f"{type(e).__name__}: {e}")
+
+print("== 6b. UI ingestion（do_replay/do_fix）同样干净拒绝，不在坏包上开浏览器 ==")
+import os
+# 本机 NO_PROXY 含 [::1] 会让 gradio/httpx 在 import 期崩（实测 Invalid port ':1]'）；
+# 导入 ui 前净化到 localhost，与 release_ui 子进程同口径。
+os.environ["NO_PROXY"] = "127.0.0.1,localhost"
+os.environ["no_proxy"] = "127.0.0.1,localhost"
+from playtest.ui import do_replay, do_fix
+
+bad_no_game = json.dumps({k: v for k, v in pack.items() if k != "game"}, ensure_ascii=False)
+try:
+    md, _ = do_replay(None, bad_no_game)
+    check("do_replay 缺 game 干净拒绝（不 KeyError 崩）",
+          ("game" in md or "结构" in md) and "KeyError" not in md, md[:90])
+except KeyError as e:
+    check("do_replay 缺 game 干净拒绝（不 KeyError 崩）", False, f"崩成 KeyError: {e}")
+except Exception as e:
+    check("do_replay 缺 game 干净拒绝（不 KeyError 崩）", False, f"{type(e).__name__}: {e}")
+
+bad_fix_path = SCHEMA_WORK / "bad_fix.json"
+save_pack({k: v for k, v in pack.items() if k != "game"}, bad_fix_path)
+try:
+    md2, _ = do_fix("blocky-jump", str(bad_fix_path), "x", "y")
+    check("do_fix 缺 game 干净拒绝（不裸崩）",
+          ("game" in md2 or "结构" in md2) and "KeyError" not in md2, md2[:90])
+except KeyError as e:
+    check("do_fix 缺 game 干净拒绝（不裸崩）", False, f"崩成 KeyError: {e}")
+except Exception as e:
+    check("do_fix 缺 game 干净拒绝（不裸崩）", False, f"{type(e).__name__}: {e}")
+
 print()
 if fails:
     print("M2 修复闭环未通过:", len(fails), "项 ->", "; ".join(fails))

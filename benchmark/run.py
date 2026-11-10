@@ -177,6 +177,10 @@ def main(argv: list[str] | None = None) -> int:
                 if r["replayed"] is not None:
                     all_replay += 1
                     ok_replay += 1 if r["replayed"] else 0
+                    # 回放不全等＝确定性证据失效，必须判红（区别于 open_findings 的能力缺口大声报）。
+                    if r["replayed"] is False:
+                        problems.append(
+                            f"{p} 在 {g}{q} seed={r['seed']} 复现包回放不全等 ⇒ 确定性证据失效")
         print(f"{p:<12} {hits_n}/{planted_n:>8} {hits_s}/{planted_s:>8} "
               f"{fps}/{clean:>8} {ok_replay}/{all_replay:>8} "
               f"{(sum(steps)//len(steps)) if steps else 0:>8}")

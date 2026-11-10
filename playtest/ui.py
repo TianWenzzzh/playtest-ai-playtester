@@ -20,7 +20,7 @@ import gradio as gr
 from .agent import POLICIES, run_episode, verify_pack
 from .fixer import LLMProposer, ManualProposer, fix
 from .llm import LLMClient
-from .trace import pack_id, save_pack
+from .trace import PackValidationError, pack_id, save_pack, validate_pack
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GAMES_DIR = ROOT / "games"
@@ -222,6 +222,10 @@ def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
         pack = json.loads(pathlib.Path(src).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return (f"复现包读不出来：`{exc}`", _note_json(f"复现包读不出来：{exc}"))
+    try:
+        validate_pack(pack)
+    except PackValidationError as exc:
+        return (f"复现包结构不完整：`{exc}`", _note_json(f"复现包结构不完整：{exc}"))
 
     if not _BROWSER_SLOT.acquire(timeout=90):
         return ("⏳ 浏览器槽位被占用，请稍后重试。", _note_json("浏览器槽位被占用"))
@@ -251,7 +255,15 @@ def do_fix(game: str, pack_path: str | None, old: str, new: str) -> tuple[str, s
         return ("补丁的 old / new 都不能为空 —— 空补丁永远不会改变判据。",
                 _note_json("补丁两端都不能为空"))
 
-    pack = json.loads(pathlib.Path(pack_path).read_text(encoding="utf-8"))
+    try:
+        pack = json.loads(pathlib.Path(pack_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return (f"复现包读不出来：`{exc}`", _note_json(f"复现包读不出来：{exc}"))
+    try:
+        validate_pack(pack)
+    except PackValidationError as exc:
+        return (f"复现包结构不完整：`{exc}`", _note_json(f"复现包结构不完整：{exc}"))
+
     proposer_name = "manual"
     proposer: Any = ManualProposer({"path": "index.html", "old": old, "new": new})
     if _client.cfg.available():

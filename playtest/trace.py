@@ -183,8 +183,55 @@ def save_pack(pack: dict[str, Any], path: pathlib.Path) -> pathlib.Path:
     return path
 
 
+class PackValidationError(ValueError):
+    """复现包结构残缺/类型错 —— 在 ingestion 处干净拒绝，不让坏包流到下游 KeyError 崩。"""
+
+
+def validate_pack(pack: Any) -> None:
+    """最小结构校验（GSPP v0.1 必需键，手写不引第三方依赖）。
+
+    只校验下游 pack_id/replay/fix 真正会读的键：缺键或类型错即抛 PackValidationError
+    并点名是哪个键。语法合法但结构残缺的包（如缺 game）原先会在 do_replay 读
+    pack["game"]["url"] 时 KeyError 崩，这里把它挡在 ingestion 处。
+    """
+    if not isinstance(pack, dict):
+        raise PackValidationError("复现包顶层必须是 JSON 对象")
+    game = pack.get("game")
+    if not isinstance(game, dict):
+        raise PackValidationError("缺 game 对象（或类型错）")
+    if not isinstance(game.get("url"), str) or not game["url"]:
+        raise PackValidationError("缺 game.url（非空字符串）")
+    initial = pack.get("initial_state")
+    if not isinstance(initial, dict):
+        raise PackValidationError("缺 initial_state 对象（或类型错）")
+    seed = initial.get("seed")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise PackValidationError("缺 initial_state.seed（整数）")
+    if not isinstance(initial.get("hash"), str) or not initial["hash"]:
+        raise PackValidationError("缺 initial_state.hash（非空字符串）")
+    actions = pack.get("actions")
+    if not isinstance(actions, list) or not actions:
+        raise PackValidationError("缺 actions（非空动作序列）")
+    for i, a in enumerate(actions):
+        if not isinstance(a, dict):
+            raise PackValidationError(f"actions[{i}] 必须是对象")
+        if not isinstance(a.get("action"), str):
+            raise PackValidationError(f"actions[{i}].action 必须是字符串")
+        if not isinstance(a.get("hash_after"), str):
+            raise PackValidationError(f"actions[{i}].hash_after 必须是字符串")
+    defect = pack.get("defect")
+    if not isinstance(defect, dict):
+        raise PackValidationError("缺 defect 对象（或类型错）")
+    if not isinstance(defect.get("signature"), str) or not defect["signature"]:
+        raise PackValidationError("缺 defect.signature（非空字符串）")
+    if not isinstance(defect.get("kind"), str) or not defect["kind"]:
+        raise PackValidationError("缺 defect.kind（非空字符串）")
+
+
 def load_pack(path: pathlib.Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    pack = json.loads(path.read_text(encoding="utf-8"))
+    validate_pack(pack)
+    return pack
 
 
 def pack_id(pack: dict[str, Any]) -> str:
