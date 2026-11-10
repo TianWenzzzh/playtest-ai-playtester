@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import sys
 import tempfile
 
@@ -178,6 +179,46 @@ def main() -> int:
     check("再请求这份文档就是未命中", r.aborted and not r.fulfilled)
     r = serve(m, f"{O}/app.js")
     check("其余条目不受影响", r.fulfilled is not None and r.fulfilled["body"] == b"x")
+
+    print("\n== 10. #24 截断盲区：未命中代码资产排在第 8 名之后时，仍须被代码腿看见 ==")
+    # 真盲区复现：report() 旧版只给 miss_examples=uniq[:8]，m3_offline 的代码腿
+    # 从这份截断样本里筛 .js/.mjs/.css。一旦未命中 >8 条且代码资产字母序排在第 8 之后，
+    # 代码腿筛不到 ⇒「未命中里没有代码字节」假绿（覆盖率不够伪装成异步不可复现）。
+    code_re = re.compile(r"\.(js|mjs|css)([?#]|$)")
+    m = OfflineMirror(make_har([]))
+    for i in range(10):
+        serve(m, f"{O}/asset-{i:02d}.png")
+    late_code = f"{O}/zz-late.js"
+    serve(m, late_code)
+    rep = m.report()
+    # 植入自证落地：11 条未命中真进了 misses，且代码资产确实在里面（没被优化掉）。
+    check("植入落地：11 条未命中且含末尾代码资产",
+          len(m.misses) == 11 and any(late_code in x for x in m.misses),
+          f"misses={len(m.misses)}")
+    full = rep.get("miss_urls", [])
+    check("report 暴露完整未命中清单 miss_urls（长度==distinct_misses）",
+          len(full) == rep["distinct_misses"] == 11, f"len={len(full)} distinct={rep['distinct_misses']}")
+    check("完整清单含排在第 8 之后的代码资产", late_code in full, f"tail={full[-1:]}")
+    found_full = [u for u in full if code_re.search(u)]
+    found_sample = [u for u in rep["miss_examples"] if code_re.search(u)]
+    check("负控开火：从完整清单筛得到末尾代码资产", found_full == [late_code], str(found_full))
+    check("旧截断样本确实漏掉它（证明盲区真实存在）", found_sample == [], str(found_sample))
+    # 正对照①：无代码未命中 ⇒ 代码腿沉默（防恒红）。
+    m2 = OfflineMirror(make_har([]))
+    for i in range(3):
+        serve(m2, f"{O}/img-{i}.png")
+    rep2 = m2.report()
+    check("正对照：纯图片未命中 ⇒ 代码腿为空",
+          [u for u in rep2.get("miss_urls", []) if code_re.search(u)] == [], str(rep2.get("miss_urls")))
+    # 正对照②：代码资产排在样本内 ⇒ 完整清单与样本都筛得到（防把合法样本判漏）。
+    m3 = OfflineMirror(make_har([]))
+    early_code = f"{O}/aa-early.js"
+    serve(m3, early_code)
+    rep3 = m3.report()
+    check("正对照：样本内代码资产两路都筛得到",
+          [u for u in rep3.get("miss_urls", []) if code_re.search(u)] == [early_code]
+          and [u for u in rep3["miss_examples"] if code_re.search(u)] == [early_code],
+          str(rep3.get("miss_urls")))
 
     failed = [x for x in results if not x[1]]
     print(f"\n{'=' * 46}\n{len(results) - len(failed)}/{len(results)} PASS")

@@ -257,7 +257,9 @@ def stage_real(skip: bool, recapture: bool) -> dict[str, Any]:
         rows = sweep(REAL_URL, seeds, lambda s: CuriosityPolicy(s), OUT / "real-packs",
                      max_steps=40, offline=mirror)["episodes"]
         late = mirror.report()
-        code_miss = [m for m in late["miss_examples"]
+        # 从完整清单筛代码字节，不用 miss_examples[:8]：截断样本会把排在第 8 之后的
+        # 懒加载代码资产漏掉，让「未命中里没有代码字节」假绿（#24）。
+        code_miss = [m for m in late["miss_urls"]
                      if re.search(r"\.(js|mjs|css)([?#]|$)", m)]
         return {"mirror": mirror, "a": a, "b": b, "rows": rows,
                 "late": late, "code_miss": code_miss}

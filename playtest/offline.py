@@ -343,6 +343,7 @@ class OfflineMirror:
             "ambiguous_norm_keys": len(self.ambiguous),
             "miss_calls": len(self.misses),
             "distinct_misses": len(uniq),
+            "miss_urls": uniq,
             "miss_examples": uniq[:8],
             "passthrough": self.passthrough,
         }
