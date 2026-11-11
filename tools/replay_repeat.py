@@ -30,7 +30,7 @@ from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from playtest.trace import pack_id
+from playtest.trace import load_pack, pack_id
 
 SCHEMA = "playtest-offline-evidence/2"
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -94,7 +94,9 @@ def main(argv: list[str] | None = None) -> int:
     packs = []
     for raw in args.pack:
         p = pathlib.Path(raw)
-        packs.append((p, json.loads(p.read_text(encoding="utf-8"))))
+        # 走 load_pack 而非裸 json.loads：缺键坏包在 ingestion 处干净拒绝（PackValidationError），
+        # 与 load_pack/do_replay/do_fix 同口径，免得下游 pack_id 读键时 KeyError 裸崩。
+        packs.append((p, load_pack(p)))
     game = packs[0][1].get("game") or {}
 
     rows = []

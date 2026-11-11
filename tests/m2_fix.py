@@ -184,6 +184,48 @@ except KeyError as e:
 except Exception as e:
     check("do_fix 缺 game 干净拒绝（不裸崩）", False, f"{type(e).__name__}: {e}")
 
+print("== 6c. replay_repeat ingestion 同样干净拒绝坏包（堵 tools/replay_repeat.py:97 裸 json.loads 旁路） ==")
+# 起因（两轮评审登记的非阻断 backlog P3-1/P2-1，本批闭合）：replay_repeat 用裸 json.loads 读包，
+# 缺键坏包绕过 validate_pack，在 pack_id 读 pack["initial_state"]["seed"] 时 KeyError 裸崩。
+# 修法：:97 改 load_pack(p) 与其余 ingestion 同口径。负控从 §0 真实包派生（缺 initial_state）；
+# 正对照 stub 掉 replay_once（子进程/浏览器边界，fast 单元测试不可避）证好包仍被接受、不恒红。
+import tools.replay_repeat as rr
+
+RR_WORK = SCHEMA_WORK / "replay_repeat"
+RR_WORK.mkdir(parents=True, exist_ok=True)
+dummy_har = RR_WORK / "dummy.har"
+dummy_har.write_bytes(b"dummy-har-bytes")
+rr_out = RR_WORK / "repeat.json"
+
+bad_rr = RR_WORK / "bad_no_initial.json"
+save_pack({k: v for k, v in pack.items() if k != "initial_state"}, bad_rr)
+try:
+    rr.main(["--har", str(dummy_har), "--id", "test", "--pack", str(bad_rr),
+             "--reps", "1", "--out", str(rr_out)])
+    check("replay_repeat 坏包干净拒绝（不 KeyError 裸崩）", False, "竟然没拒绝坏包")
+except ValueError as e:
+    check("replay_repeat 坏包干净拒绝（不 KeyError 裸崩）", True, str(e)[:70])
+except KeyError as e:
+    check("replay_repeat 坏包干净拒绝（不 KeyError 裸崩）", False, f"崩成 KeyError: {e}")
+
+good_rr = RR_WORK / "good.json"
+save_pack(pack, good_rr)
+_orig_replay_once = rr.replay_once
+rr.replay_once = lambda p, h: {"rc": 0, "replayed": True, "initial_hash_matched": True,
+                               "steps_matched": 1, "steps_total": 1, "hashes_match": True,
+                               "mismatch": None, "stderr_tail": ""}
+try:
+    rc_good = rr.main(["--har", str(dummy_har), "--id", "test", "--pack", str(good_rr),
+                       "--reps", "1", "--out", str(rr_out)])
+    rr_data = json.loads(rr_out.read_text(encoding="utf-8"))
+    check("replay_repeat 好包仍被接受（正对照，防恒红）",
+          rc_good == 0 and rr_data["episodes"][0]["seed"] == pack["initial_state"]["seed"],
+          f"rc={rc_good}")
+except Exception as e:
+    check("replay_repeat 好包仍被接受（正对照，防恒红）", False, f"{type(e).__name__}: {e}")
+finally:
+    rr.replay_once = _orig_replay_once
+
 print()
 if fails:
     print("M2 修复闭环未通过:", len(fails), "项 ->", "; ".join(fails))
