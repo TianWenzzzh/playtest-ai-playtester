@@ -55,7 +55,7 @@
       "ownership": "third_party",
       "permissions": {
         "exploration": "public_client_only",
-        "publish_report": "not_requested"
+        "publish_report": "granted"
       },
       "defects": [],
       "replays": [
@@ -70,8 +70,11 @@
         }
       ],
       "author_confirmation": {
-        "status": "not_requested",
-        "evidence": null
+        "status": "confirmed",
+        "evidence": {
+          "path": "evidence/author_replies/work-b-reply.md",
+          "sha256": "2c3edb900f1fef06cfc7306280dcb041a5546b37e15b792e60e7a6b8fa56c76b"
+        }
       }
     },
     {

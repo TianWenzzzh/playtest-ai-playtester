@@ -83,7 +83,7 @@ def static_evidence_needles(public_root: pathlib.Path) -> list[str]:
             str(game["title"]),
             f"{len(game['defects'])} 条缺陷",
             f"{len(game['replays'])} 条复现记录",
-            "作者确认：not_requested",
+            f"作者确认：{(game.get('author_confirmation') or {}).get('status') or 'not_requested'}",
         ))
     return needles
 
