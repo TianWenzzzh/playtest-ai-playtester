@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -108,6 +109,14 @@ def deid_hits(root: pathlib.Path) -> list[tuple[str, int, str]]:
     return hits
 
 
+def _ids_untraceable(ids) -> bool:
+    """id 必须是不可追溯单字母代号 work-<a-z>、互不重复、且非空（>=3 件）。
+    泛化自原先硬编 [work-a,work-b,work-c]：保留「不可追溯」意图，允许语料随作者确认增长。"""
+    return (bool(ids) and len(ids) >= 3
+            and all(isinstance(i, str) and re.fullmatch(r"work-[a-z]", i) for i in ids)
+            and len(set(ids)) == len(ids))
+
+
 def deid_checks() -> None:
     print("\n== 7. 第三方身份脱敏：分布式面零命中 ==")
     face = deid_face_files(ROOT)
@@ -120,7 +129,13 @@ def deid_checks() -> None:
     corpus = json.loads((ROOT / "evidence" / "corpus.json").read_bytes())
     games = corpus.get("games") or []
     ids = [g.get("id") for g in games]
-    check("语料 id 全是不可追溯代号", ids == ["work-a", "work-b", "work-c"], str(ids))
+    check("语料 id 全是不可追溯代号", _ids_untraceable(ids), str(ids))
+    check("id 尺正对照：work-a..work-o 单字母代号全过",
+          _ids_untraceable([f"work-{c}" for c in "abctkzlyo"]), "")
+    check("id 尺负控：可追溯 id 必须红",
+          not _ids_untraceable(["work-a", "work-b", "salamander-h5"]), "")
+    check("id 尺负控：重复 id 必须红",
+          not _ids_untraceable(["work-a", "work-a", "work-b"]), "")
     urls = [g.get("source_url", "") for g in games]
     check("source_url 用 RFC2606 保留域（故意不可解析，不冒充真来源）",
           bool(urls) and all(u.startswith("https://") and u.split("/")[2].endswith(".invalid")

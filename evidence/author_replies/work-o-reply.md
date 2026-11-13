@@ -1,0 +1,9 @@
+# work-o 作者确认（level 3）· 脱敏转录
+
+- 作品代号：`work-o`（真实标题/作者见本机 gitignored `out/deid-map.local.json` 与邀请台账 `raw/author_invites_batch2_1112.md`，公开不点名）。
+- 确认状态：`confirmed`。作者原始回复：「同意」
+- 回复渠道：魔搭创空间讨论区，作者本人账号回复（邀请帖发出后数小时内）。
+- 原始证据：本机 `out/author_replies/work-o-reply.png`（截图，含真实身份，gitignored 不分发；参赛材料可附原图），sha256 `e69fd712f5870e5c54bcac8581c4f74d0fd3bf8384a42477ba7ec54f76f31c76`。
+- 授权口径：作者同意「确认我们离线测过其作品」，并授权在**参赛材料**里点名（只点名、不挂缺陷）；公开台账维持脱敏代号。
+
+- 本转录为脱敏派生件，逐字对应原始截图；哈希绑定见 corpus.json `work-o.author_confirmation.evidence.sha256`。
