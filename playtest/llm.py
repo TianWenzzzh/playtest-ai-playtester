@@ -82,7 +82,8 @@ class LLMClient:
         self.cfg = config or LLMConfig.from_env()
         self.stat = CallStat()
 
-    def complete(self, messages: list[dict[str, str]], force_json: bool = False) -> str | None:
+    def complete(self, messages: list[dict[str, str]], force_json: bool = False,
+                 max_tokens: int | None = None) -> str | None:
         if not self.cfg.available():
             self.stat.last_error = self.cfg.reason_unavailable()
             return None
@@ -91,7 +92,7 @@ class LLMClient:
             "model": self.cfg.model,
             "messages": messages,
             "temperature": self.cfg.temperature,
-            "max_tokens": self.cfg.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self.cfg.max_tokens,
         }
         if force_json:
             body["response_format"] = {"type": "json_object"}
