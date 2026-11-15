@@ -231,6 +231,10 @@ def main() -> int:
                         all(landing.get_by_role("button", name=name, exact=True).count() == 1
                             for name in ("① 开始试玩", "② 一键复现", "③ 自动修复")),
                     )
+                    check(
+                        "首屏含白话三步上手引导",
+                        "三步上手" in landing_text and "让 AI 替你把游戏玩一遍" in landing_text,
+                    )
                     missing = [n for n in static_evidence_needles() if n not in landing_text]
                     check("首屏展示真实封存台账且标明非实时", not missing, "缺：" + repr(missing))
                     check("禁用模型时横幅明示未配置", "推理端点未配置" in landing_text)

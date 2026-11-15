@@ -48,6 +48,32 @@ ARMS: dict[str, list[tuple[str, str]]] = {
 
 _client = LLMClient()
 
+# 白话缺陷释义：把六类判据术语翻译成人话（界面结果区与「基准与判据」共用同一份）。
+_KIND_PLAIN: dict[str, str] = {
+    "crash": "游戏直接崩溃或报错弹出来了——就像 App 闪退。",
+    "invariant_violation": "游戏违反了它自己声明的规则（比如血量不该为负，却变成了负数）。",
+    "softlock": "卡死了：玩家既赢不了也死不掉，像走进一条永远出不去的死胡同。",
+    "unwinnable": "怎么都赢不了：能到达的结局全是失败，再努力也没用。",
+    "ui_dead_end": "有个按钮看着能点、点了却毫无反应——功能根本没接上。",
+    "balance_break": "数值失衡：某个策略强得离谱或弱得没法玩，破坏了平衡。",
+}
+
+# 一键演示预设（借鉴研伴 EXAMPLE_CHIPS）：点一下选好场景，再点 ① 即可看 AI 找 bug。
+# (chip 文案, 游戏, 臂 value, 策略, 种子, 选好后提示)
+_PRESETS: list[tuple[str, str, str, str, int, str]] = [
+    ("🎮 跳跃游戏 · 藏了个过不去的坎", "blocky-jump", "?maxgap=6", "curiosity", 20261105,
+     "已选好「跳跃游戏」的有缺陷版本。点 **① 开始试玩**，看 AI 自己玩、自己发现那个跳不过去的坎。"),
+    ("🧩 迷宫 · 有堵拿不到钥匙的墙", "maze-exit", "?plant=keywall", "curiosity", 20261105,
+     "已选好「迷宫」的有缺陷版本。点 **① 开始试玩**，看 AI 怎么撞上那堵需要钥匙却拿不到的墙。"),
+    ("🖱️ 点击游戏 · 有个点了没反应的按钮", "clicker-quest", "?plant=deadend", "curiosity", 20261105,
+     "已选好「点击游戏」。点 **① 开始试玩**，看 AI 找出那个看着能点、实际没接功能的按钮。"),
+]
+
+
+def _apply_preset(game: str, arm: str, policy: str, seed: int, hint: str):
+    return (gr.update(value=game), gr.update(value=arm), gr.update(value=policy),
+            gr.update(value=seed), hint)
+
 
 def game_names() -> list[str]:
     return sorted(p.parent.name for p in GAMES_DIR.glob("*/index.html"))
@@ -177,6 +203,9 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
 
         if not res.defect:
             verdict = ("## 本局结论：**未开火** ✅\n\n"
+                       "> 💡 **人话版**：这一局 AI 没发现 bug。"
+                       + ("这是**干净臂**（正常游戏），沉默是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
+                          else "这一局没找到缺陷 —— 换个种子或换种策略再试。") + "\n\n"
                        + ("这是**干净臂**，沉默是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
                           else "这一局没找到缺陷 —— 换种子或换策略再试。"))
             return frame_html, verdict, _state_table(res.pack["initial_state"]["snapshot"] if res.pack else {}), \
@@ -185,12 +214,13 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         d = res.defect
         verdict = (
             f"## 本局结论：**{d['kind']}** 🔴\n\n"
+            f"> 💡 **人话版**：{_KIND_PLAIN.get(d['kind'], 'AI 发现了一个问题。')}\n\n"
             f"- 签名：`{d['signature']}`\n"
             f"- 首次出现帧：`{d.get('first_seen_step')}`\n"
             f"- 走到那里的动作数：`{len(res.pack['actions'])}`\n\n"
             f"**判据说明**：{d.get('detail', {}).get('note', '')}\n\n"
-            "下一步点 **一键复现** —— 会**新开一个浏览器实例**，"
-            "用下面这份初始状态 + 种子 + 动作序列重跑，逐帧比状态哈希。"
+            "下一步点 **② 一键复现** —— 会**新开一个浏览器实例**，"
+            "用下面这份初始状态 + 种子 + 动作序列重跑，逐帧比状态哈希，证明这个 bug 谁都能重现。"
         )
         stream = (f"步数 {res.steps} · 状态 {res.distinct_states} · 探测 {res.probes} 次 · "
                   f"{res.wall_ms} ms\n\n" + _decision_table(res.policy_trace or {}))
@@ -236,8 +266,12 @@ def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
 
     ok = v["replayed"]
     head = ("## 回放校验：**通过** ✅\n\n" if ok else "## 回放校验：**不一致** 🔴\n\n")
+    plain = ("> 💡 **人话版**：换台机器、换个时间重跑，游戏逐帧走出一模一样的过程——"
+             "这个 bug 铁证如山，谁都能重现。\n\n" if ok else
+             "> 💡 **人话版**：这次重跑和原来对不上，这份记录不能当证据。\n\n")
     detail = (
-        f"- 初始状态哈希一致：`{v['initial_hash_matched']}`\n"
+        plain
+        + f"- 初始状态哈希一致：`{v['initial_hash_matched']}`\n"
         f"- 动作帧哈希一致：`{v['steps_matched']}/{v['steps_total']}`\n"
         f"- mismatch：`{json.dumps(v.get('mismatch'), ensure_ascii=False)[:200]}`\n\n"
         + ("**含义**：任何人拿这份包（初始状态 + 种子 + 动作序列）重跑，"
@@ -278,8 +312,12 @@ def do_fix(game: str, pack_path: str | None, old: str, new: str) -> tuple[str, s
         _BROWSER_SLOT.release()
 
     origin = "模型生成" if proposer_name == "llm" else "**人工提供**（本次只验证闭环机器，不代表模型的修复能力）"
+    plain = ("> 💡 **人话版**：补丁打上去后，原来那个 bug 消失了（红转绿），"
+             "而且换别的玩法重测也没把别处改坏。\n\n" if res.ok else
+             "> 💡 **人话版**：补丁打上去后 bug 还在（仍然红），需要再想办法。\n\n")
     md = [
         f"## 修复结果：{'红转绿 ✅' if res.ok else '仍然红 🔴'}",
+        plain,
         f"- 补丁来源：{origin}",
         f"- 修复前判据：`{(res.defect_before or {}).get('kind')}`",
         f"- 修复后判据：`{(res.defect_after or {}).get('kind') if res.defect_after else '不再开火'}`",
@@ -392,18 +430,57 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 .selected,.tab-nav button.selected{color:var(--pt-cyan)!important;}
 /* empty-state pipeline */
 .pt-empty{padding:26px 22px;display:flex;flex-direction:column;gap:18px;min-height:340px;justify-content:center;}
-.pt-empty-title{font:700 12px ui-monospace,'Cascadia Code',Consolas,monospace;letter-spacing:.2em;color:var(--pt-muted);text-transform:uppercase;}
-.pt-steps{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;}
-.pt-step{flex:1;min-width:110px;background:var(--pt-surface2);border:1px solid var(--pt-border);border-radius:12px;
+.pt-empty-title{font-size:18px;font-weight:800;color:#fff;text-align:center;}
+.pt-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.pt-step{min-width:0;background:var(--pt-surface2);border:1px solid var(--pt-border);border-radius:12px;
   padding:12px 12px;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,transform .15s;}
 .pt-step:hover{border-color:var(--pt-accent);transform:translateY(-2px);}
 .pt-step-n{font:700 11px ui-monospace,monospace;color:var(--pt-cyan);border:1px solid rgba(34,211,238,.35);
   width:20px;height:20px;border-radius:6px;display:grid;place-items:center;}
 .pt-step-t{font-weight:700;color:var(--pt-text);font-size:14px;}
 .pt-step-d{color:var(--pt-muted);font-size:11.5px;}
-.pt-step-arrow{align-self:center;color:var(--pt-accent);font-size:16px;}
+.pt-step-arrow{display:none;}
+@media (max-width:640px){.pt-steps{grid-template-columns:repeat(2,1fr);}}
 .pt-empty-hint{color:var(--pt-muted);font-size:13px;}
 .pt-empty-hint b{color:var(--pt-accent);}
+/* hero：利益先行的白话开场（借鉴研伴 Hero） */
+.pt-hero{display:flex;gap:20px;align-items:center;padding:22px 24px;margin-bottom:14px;
+  background:linear-gradient(120deg,rgba(79,140,255,.13),rgba(139,123,255,.09) 58%,rgba(34,211,238,.06));
+  border:1px solid var(--pt-border);border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.3);}
+.pt-mascot{flex:0 0 auto;width:88px;height:88px;display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 38%,rgba(79,140,255,.28),rgba(18,22,31,.55));
+  border:1px solid var(--pt-border);border-radius:22px;}
+.pt-hero-body{min-width:0;}
+.pt-hero-title{font-size:25px;font-weight:800;line-height:1.32;color:#fff;}
+.pt-hero-title em{font-style:normal;color:var(--pt-cyan);}
+.pt-hero-sub{margin-top:8px;font-size:14px;line-height:1.75;color:var(--pt-muted);max-width:820px;}
+.pt-hero-sub b{color:var(--pt-cyan);font-weight:700;}
+.pt-hero-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;}
+.pt-chip{font-size:12.5px;color:var(--pt-text);background:var(--pt-surface2);border:1px solid var(--pt-border);
+  padding:6px 12px;border-radius:999px;}
+/* 三步上手引导 */
+.pt-guide{margin-bottom:14px;padding:16px 20px;background:var(--pt-surface)!important;border:1px solid var(--pt-border);border-radius:16px;}
+.pt-guide-title{font:700 12px ui-monospace,'Cascadia Code',Consolas,monospace;letter-spacing:.16em;color:var(--pt-cyan);
+  text-transform:uppercase;margin-bottom:12px;}
+.pt-guide-steps{display:flex;gap:12px;flex-wrap:wrap;}
+.pt-gstep{flex:1;min-width:230px;display:flex;gap:12px;align-items:flex-start;background:var(--pt-surface2);
+  border:1px solid var(--pt-border);border-radius:12px;padding:12px 14px;transition:border-color .15s,transform .15s;}
+.pt-gstep:hover{border-color:var(--pt-accent);transform:translateY(-2px);}
+.pt-gn{flex:0 0 auto;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;
+  background:linear-gradient(135deg,var(--pt-accent),var(--pt-accent2));}
+.pt-gstep b{display:block;color:var(--pt-text);font-size:13.5px;margin-bottom:3px;}
+.pt-gstep span{color:var(--pt-muted);font-size:12px;line-height:1.55;}
+/* 一键演示预设 */
+.preset-btn{border-radius:10px!important;font-size:12.5px!important;font-weight:600!important;text-align:left!important;
+  padding:9px 12px!important;border:1px dashed rgba(34,211,238,.4)!important;background:rgba(34,211,238,.06)!important;
+  color:var(--pt-text)!important;transition:border-color .12s,background .12s,transform .12s!important;}
+.preset-btn:hover{border-color:var(--pt-cyan)!important;background:rgba(34,211,238,.14)!important;transform:translateY(-1px);}
+.preset-hint,.preset-hint p{font-size:12px!important;color:var(--pt-muted)!important;line-height:1.6!important;}
+.preset-hint b{color:var(--pt-cyan)!important;}
+.rail .info{color:var(--pt-muted)!important;font-size:11px!important;line-height:1.5!important;opacity:.9;}
+/* 空态吉祥物 + 引导语 */
+.pt-empty-mascot{display:flex;justify-content:center;margin-bottom:2px;}
+.pt-empty-lead{color:var(--pt-text);font-size:14px;line-height:1.75;text-align:center;max-width:660px;margin:0 auto;}
 /* motion */
 @keyframes pt-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pt-drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(2%,1%,0) scale(1.05)}100%{transform:translate3d(0,0,0) scale(1)}}
@@ -411,6 +488,8 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 @keyframes pt-blink{0%,100%{opacity:1}50%{opacity:.35}}
 .gradio-container::before{animation:pt-drift 26s ease-in-out infinite;}
 .pt-header{animation:pt-rise .5s ease both;}
+.pt-hero{animation:pt-rise .5s .05s ease both;}
+.pt-guide{animation:pt-rise .5s .1s ease both;}
 .status-banner{animation:pt-rise .5s .08s ease both;}
 .rail{animation:pt-rise .55s .14s ease both;}
 .stage-col{animation:pt-rise .55s .2s ease both;}
@@ -424,7 +503,7 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 .panel:hover{border-color:#33405a!important;box-shadow:0 8px 26px rgba(0,0,0,.4)!important;}
 @media (prefers-reduced-motion: reduce){
   .gradio-container::before,.pt-logo,.pt-badge::before{animation:none!important;}
-  .pt-header,.status-banner,.rail,.stage-col,.console-tabs,.evidence{animation:none!important;}
+  .pt-header,.pt-hero,.pt-guide,.status-banner,.rail,.stage-col,.console-tabs,.evidence{animation:none!important;}
 }
 """
 
@@ -434,28 +513,72 @@ _HEADER = """
     <path d="M6 4l12 8-12 8V4z" fill="#fff" opacity=".95"/>
     <circle cx="18.5" cy="5.5" r="2.4" fill="#22d3ee"/></svg></div>
   <div class="pt-brand"><div class="pt-name">Play<em>Test</em></div>
-    <div class="pt-tag">AI 试玩员 · Autonomous Game Playtester · 读状态 → 定动作 → 判缺陷 → 复现 → 修复 → 回归</div></div>
+    <div class="pt-tag">AI 试玩员 · 自动玩游戏 · 找 bug · 可复现 · 给补丁</div></div>
   <div class="pt-badges"><span class="pt-badge">GSPP v0.1</span><span class="pt-badge v">可复现验证</span><span class="pt-badge">MIT</span></div>
+</div>
+"""
+
+
+def _mascot(size: int) -> str:
+    """友好的试玩员机器人（借鉴研伴 Owl 吉祥物：让冷工具有一张脸）。"""
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 64 64" fill="none" aria-hidden="true">'
+        '<line x1="32" y1="20" x2="32" y2="12" stroke="#8b7bff" stroke-width="2.5"/>'
+        '<circle cx="32" cy="10" r="3" fill="#8b7bff"/>'
+        '<rect x="9" y="30" width="5" height="12" rx="2.5" fill="#4f8cff"/>'
+        '<rect x="50" y="30" width="5" height="12" rx="2.5" fill="#4f8cff"/>'
+        '<rect x="14" y="20" width="36" height="30" rx="9" fill="#1b2333" stroke="#4f8cff" stroke-width="2"/>'
+        '<circle cx="25" cy="33" r="4.5" fill="#22d3ee"/><circle cx="39" cy="33" r="4.5" fill="#22d3ee"/>'
+        '<circle cx="26.5" cy="31.5" r="1.5" fill="#fff"/><circle cx="40.5" cy="31.5" r="1.5" fill="#fff"/>'
+        '<path d="M25 42 q7 5 14 0" stroke="#34d399" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>'
+    )
+
+
+_HERO = """
+<div class="pt-hero">
+  <div class="pt-mascot">""" + _mascot(64) + """</div>
+  <div class="pt-hero-body">
+    <div class="pt-hero-title">让 AI 替你把游戏玩一遍，<em>自动找出藏着的 bug</em></div>
+    <div class="pt-hero-sub">PlayTest 是一个「AI 试玩员」：它自己打开游戏、自己操作、自己判断哪里出了问题，
+      还能证明这个 bug 任何人都能重现，并给出修复补丁。<b>你只需要点三下。</b></div>
+    <div class="pt-hero-chips">
+      <span class="pt-chip">🕹️ 自己玩 · 不用你动手</span>
+      <span class="pt-chip">🔍 找出 5 类常见 bug</span>
+      <span class="pt-chip">🔁 谁都能重现 · 可进 CI</span>
+      <span class="pt-chip">🛠️ 给补丁 · 标明模型还是人工</span>
+    </div>
+  </div>
+</div>
+<div class="pt-guide">
+  <div class="pt-guide-title">三步上手 · 跟着点就行</div>
+  <div class="pt-guide-steps">
+    <div class="pt-gstep"><span class="pt-gn">1</span><div><b>点「① 开始试玩」</b><span>AI 自动玩游戏、找出藏着的 bug，画面和「人话版」结论实时出现在右边。</span></div></div>
+    <div class="pt-gstep"><span class="pt-gn">2</span><div><b>点「② 一键复现」</b><span>证明这个 bug 不是偶然：换台机器重跑，逐帧一模一样。</span></div></div>
+    <div class="pt-gstep"><span class="pt-gn">3</span><div><b>点「③ 自动修复」</b><span>给出修复补丁并验证「红转绿」，还会检查别处没被改坏。</span></div></div>
+  </div>
 </div>
 """
 
 _EMPTY_STATE = """
 <div class="pt-empty">
-  <div class="pt-empty-title"> Autonomous Playtest Pipeline</div>
+  <div class="pt-empty-mascot">""" + _mascot(56) + """</div>
+  <div class="pt-empty-title">准备好了吗？点左边的 ① 开始试玩</div>
+  <div class="pt-empty-lead">AI 会自己打开游戏、自己玩、自己找 bug。游戏画面和「人话版」结论会出现在这里。<br>
+    不知道选什么？点左侧任一「一键演示」，再点 <b>① 开始试玩</b> 就能看效果。</div>
   <div class="pt-steps">
-    <div class="pt-step"><span class="pt-step-n">1</span><span class="pt-step-t">读状态</span><span class="pt-step-d">GSPP 钩子 / 兜底指纹</span></div>
+    <div class="pt-step"><span class="pt-step-n">1</span><span class="pt-step-t">读状态</span><span class="pt-step-d">看懂游戏现在的样子</span></div>
     <div class="pt-step-arrow">→</div>
-    <div class="pt-step"><span class="pt-step-n">2</span><span class="pt-step-t">定动作</span><span class="pt-step-d">策略决策 · 可解释</span></div>
+    <div class="pt-step"><span class="pt-step-n">2</span><span class="pt-step-t">定动作</span><span class="pt-step-d">决定下一步按什么</span></div>
     <div class="pt-step-arrow">→</div>
-    <div class="pt-step"><span class="pt-step-n">3</span><span class="pt-step-t">判缺陷</span><span class="pt-step-d">六类判据 · 诚实负</span></div>
+    <div class="pt-step"><span class="pt-step-n">3</span><span class="pt-step-t">判缺陷</span><span class="pt-step-d">判断有没有 bug</span></div>
     <div class="pt-step-arrow">→</div>
-    <div class="pt-step"><span class="pt-step-n">4</span><span class="pt-step-t">复现</span><span class="pt-step-d">逐帧哈希 · 可进 CI</span></div>
+    <div class="pt-step"><span class="pt-step-n">4</span><span class="pt-step-t">复现</span><span class="pt-step-d">证明谁都能重现</span></div>
     <div class="pt-step-arrow">→</div>
-    <div class="pt-step"><span class="pt-step-n">5</span><span class="pt-step-t">修复</span><span class="pt-step-d">模型/人工 · 标明来源</span></div>
+    <div class="pt-step"><span class="pt-step-n">5</span><span class="pt-step-t">修复</span><span class="pt-step-d">给出修复补丁</span></div>
     <div class="pt-step-arrow">→</div>
-    <div class="pt-step"><span class="pt-step-n">6</span><span class="pt-step-t">回归</span><span class="pt-step-d">其余种子 · 确认不红</span></div>
+    <div class="pt-step"><span class="pt-step-n">6</span><span class="pt-step-t">回归</span><span class="pt-step-d">确认别处没改坏</span></div>
   </div>
-  <div class="pt-empty-hint">在左侧选择夹具与缺陷臂，点击 <b>① 开始试玩</b> —— 游戏画面与实时结论将在此呈现。</div>
+  <div class="pt-empty-hint">这是 AI 试玩员的完整流水线：从「看懂游戏」到「修好并回归」，全程自动、全程可解释。</div>
 </div>
 """
 
@@ -482,15 +605,26 @@ def build() -> gr.Blocks:
 
     with gr.Blocks(title="PlayTest · AI 试玩员") as demo:
         gr.HTML(_HEADER)
+        gr.HTML(_HERO)
         llm_banner = gr.Markdown(_llm_banner(), elem_classes=["status-banner"])
         with gr.Row(elem_classes=["console"]):
             with gr.Column(scale=1, elem_classes=["rail"]):
-                gr.HTML("<div class='rail-title'>Control Rail · 控制台</div>")
-                game = gr.Dropdown(names, value=names[0] if names else None, label="夹具游戏")
-                arm = gr.Dropdown(arms, value="?maxgap=6", label="缺陷臂")
-                policy = gr.Dropdown(sorted(POLICIES), value="curiosity", label="策略")
-                seed = gr.Number(value=20261105, precision=0, label="随机种子")
-                gr.HTML("<div class='rail-title'>Pipeline · 三步闭环</div>")
+                gr.HTML("<div class='rail-title'>一键演示 · 点一下选好场景</div>")
+                preset_hint = gr.Markdown("不知道选什么？点下面任一演示，再点 **① 开始试玩**。",
+                                          elem_classes=["preset-hint"])
+                preset_btns = []
+                for label, g, a, p, s, hint in _PRESETS:
+                    preset_btns.append((gr.Button(label, elem_classes=["preset-btn"]), (g, a, p, s, hint)))
+                gr.HTML("<div class='rail-title'>自定义 · 控制台</div>")
+                game = gr.Dropdown(names, value=names[0] if names else None, label="夹具游戏",
+                                   info="选一个要体检的小游戏（内置演示游戏，都是真实可玩的网页游戏）。")
+                arm = gr.Dropdown(arms, value="?maxgap=6", label="缺陷臂",
+                                  info="要不要故意埋个 bug 来演示？「有缺陷臂」=已埋 bug，看 AI 能否找出；「干净臂」=正常游戏，AI 应报告没问题。")
+                policy = gr.Dropdown(sorted(POLICIES), value="curiosity", label="策略",
+                                     info="AI 用什么思路玩：curiosity 好奇探索（推荐）· clue 按线索 · random 随机 · llm 靠大模型（需配置端点）。")
+                seed = gr.Number(value=20261105, precision=0, label="随机种子",
+                                 info="重玩编号：同一数字=同一种玩法可精确重放；换个数字=换种玩法再找。")
+                gr.HTML("<div class='rail-title'>三步闭环 · 跟着点</div>")
                 scan_btn = gr.Button("① 开始试玩", variant="primary", elem_classes=["step-btn", "step-1"])
                 replay_btn = gr.Button("② 一键复现", elem_classes=["step-btn", "step-2"])
                 fix_btn = gr.Button("③ 自动修复", elem_classes=["step-btn", "step-3"])
@@ -520,6 +654,14 @@ def build() -> gr.Blocks:
                 fix_json = gr.JSON(label="fix result")
             with gr.Tab("基准与判据"):
                 gr.Markdown(
+                    "## 用大白话讲，AI 能找出这 5 类问题\n\n"
+                    "| 问题 | 通俗解释 | 专业代号 |\n|---|---|---|\n"
+                    "| 崩溃 | 游戏直接报错 / 闪退 | `crash` |\n"
+                    "| 违反规则 | 违反了游戏自己声明的规则（如血量变负） | `invariant_violation` |\n"
+                    "| 卡死 | 赢不了也死不掉，像走进死胡同 | `softlock` |\n"
+                    "| 赢不了 | 能到的结局全是失败，努力也没用 | `unwinnable` |\n"
+                    "| 按钮没反应 | 看着能点、点了没反应，功能没接上 | `ui_dead_end` |\n\n"
+                    "下面是给开发者看的精确判据（普通用户可跳过）。\n\n"
                     "## 缺陷分类\n\n"
                     "| kind | 判据 | 需要声明 |\n|---|---|---|\n"
                     "| `crash` | 未捕获异常 / 页面错误上升 | — |\n"
@@ -568,6 +710,9 @@ def build() -> gr.Blocks:
             .then(lambda p: gr.update(value=p) if p else gr.update(), pack_state, pack_out)
         replay_btn.click(do_replay, [pack_state, paste], [replay_md, replay_json])
         fix_btn.click(do_fix, [game, pack_state, old, new], [fix_md, fix_json])
+        for btn, (g, a, p, s, hint) in preset_btns:
+            btn.click(lambda g=g, a=a, p=p, s=s, hint=hint: _apply_preset(g, a, p, s, hint),
+                      None, [game, arm, policy, seed, preset_hint])
     return demo
 
 
