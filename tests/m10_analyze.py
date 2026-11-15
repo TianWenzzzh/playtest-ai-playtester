@@ -3,8 +3,10 @@ import os
 import pathlib
 import sys
 
-os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost")
-os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
+# 强制清 NO_PROXY：环境若含 [::1] 会让 gradio import 时 httpx 解析端口崩（InvalidURL ':1]'）。
+# 上传验证测试 import playtest.ui（含 gradio），须在 import 前覆盖而非 setdefault。
+os.environ["NO_PROXY"] = "127.0.0.1,localhost"
+os.environ["no_proxy"] = "127.0.0.1,localhost"
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from playtest.analyze import analyze_game, render_report_md
 
