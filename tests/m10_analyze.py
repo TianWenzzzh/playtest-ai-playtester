@@ -1,7 +1,10 @@
 """m10 · 创作者面游戏分析（analyze_game）：解析/空code_ref丢弃/降级/报告标注。"""
+import os
 import pathlib
 import sys
 
+os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost")
+os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from playtest.analyze import analyze_game, render_report_md
 
@@ -84,6 +87,30 @@ def test_bundled_2048_self_contained():
     text = bundled.read_text(encoding="utf-8")
     leftover = re.findall(r"@import[^;]+;|url\((?!['\"]?data:)[^)]+\)", text)
     assert not leftover, f"bundled 2048 残留外部引用: {leftover[:5]}"
+
+
+def test_upload_no_input():
+    from playtest.ui import do_analyze_upload
+    msg = do_analyze_upload(None, "")
+    assert "请上传" in msg
+
+
+def test_upload_bad_url_scheme():
+    from playtest.ui import do_analyze_upload
+    msg = do_analyze_upload(None, "file:///etc/passwd")
+    assert "http" in msg and "❌" in msg
+
+
+def test_upload_zip_slip_rejected():
+    import tempfile
+    import zipfile
+    from playtest.ui import do_analyze_upload
+    with tempfile.TemporaryDirectory() as td:
+        zp = pathlib.Path(td) / "evil.zip"
+        with zipfile.ZipFile(zp, "w") as z:
+            z.writestr("../evil.html", "<html></html>")
+        msg = do_analyze_upload(str(zp), "")
+        assert "越界" in msg or "❌" in msg
 
 
 if __name__ == "__main__":

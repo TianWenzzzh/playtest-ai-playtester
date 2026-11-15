@@ -603,14 +603,17 @@ def _theme() -> gr.themes.Base:
     )
 
 
-def do_analyze(game: str) -> str:
+def _analyze_dir(gdir: pathlib.Path) -> str:
     from .analyze import analyze_game, render_report_md
-    gdir = GAMES_DIR / game
     src = gdir / "original" if (gdir / "original").exists() else gdir
+    index = gdir / "index.html"
+    if not index.exists():
+        return "❌ 找不到 index.html，请确认上传的是网页游戏（含 index.html）。"
+    url = index.resolve().as_uri()
     if not _BROWSER_SLOT.acquire(timeout=90):
         return "⏳ 前面还有任务在跑（2 vCPU 只允许一个浏览器），请稍后重试。"
     try:
-        ep = _pw(run_episode, url_for(game, ""), 20261105,
+        ep = _pw(run_episode, url, 20261105,
                  POLICIES["curiosity"](seed=20261105), max_steps=20)
     finally:
         _BROWSER_SLOT.release()
@@ -619,6 +622,49 @@ def do_analyze(game: str) -> str:
         report = analyze_game(src, None, _client)
         return render_report_md(report) + f"\n\n> ⚠️ 试玩中断（`{ep.error}`），以上建议基于代码阅读。"
     return render_report_md(analyze_game(src, ep, _client))
+
+
+def do_analyze(game: str) -> str:
+    return _analyze_dir(GAMES_DIR / game)
+
+
+def do_analyze_upload(file, url) -> str:
+    import shutil
+    import urllib.request
+    import uuid
+    import zipfile
+    up = WORK / "uploads" / uuid.uuid4().hex[:8]
+    up.mkdir(parents=True, exist_ok=True)
+    if file is not None:
+        fp = pathlib.Path(file)
+        if fp.suffix.lower() == ".zip":
+            with zipfile.ZipFile(fp) as z:
+                base = up.resolve()
+                for m in z.namelist():
+                    if not str((up / m).resolve()).startswith(str(base)):
+                        return "❌ zip 含越界路径，已拒绝。"
+                z.extractall(up)
+        else:
+            shutil.copy(fp, up / "index.html")
+    elif url and url.strip():
+        u = url.strip()
+        if not u.startswith(("http://", "https://")):
+            return "❌ URL 须以 http:// 或 https:// 开头。"
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "PlayTest-Analyzer"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                html = r.read(2_000_000)
+            (up / "index.html").write_bytes(html)
+        except Exception as exc:
+            return f"❌ 抓取 URL 失败：`{exc}`"
+    else:
+        return "请上传游戏 HTML/zip，或填写游戏 URL。"
+    if not (up / "index.html").exists():
+        found = sorted(up.rglob("index.html"))
+        if found:
+            return _analyze_dir(found[0].parent)
+        return "❌ 上传内容里找不到 index.html。"
+    return _analyze_dir(up)
 
 
 def build() -> gr.Blocks:
@@ -636,7 +682,11 @@ def build() -> gr.Blocks:
                                             value="2048", label="分析的游戏",
                                             info="选一个游戏让 AI 试玩＋读码分析。2048 是 MIT 精品演示，零接入即可分析。")
                 analyze_btn = gr.Button("🔍 AI 试玩分析", variant="primary", elem_classes=["step-btn", "step-1"])
-                gr.Markdown("上传你自己的游戏（开发中也可以）即将支持。", elem_classes=["preset-hint"])
+                gr.HTML("<div class='rail-title'>上传你的游戏 · 开发中也可以</div>")
+                upload_file = gr.File(label="游戏 HTML 或 zip", file_types=[".html", ".zip"],
+                                      file_count="single")
+                upload_url = gr.Textbox(label="或游戏 URL", placeholder="https://你的游戏地址")
+                upload_btn = gr.Button("📤 上传并分析", elem_classes=["step-btn", "step-2"])
             with gr.Column(scale=3, elem_classes=["stage-col"]):
                 analysis_report = gr.Markdown(
                     "点左边 **🔍 AI 试玩分析**，AI 会玩一遍＋读码，给出人话体检报告（优化建议＋报错修复）。",
@@ -744,6 +794,7 @@ def build() -> gr.Blocks:
         gr.HTML("<div class='pt-footer'>PlayTest · 录屏不是证据，可复现才是 · MIT · evidence/corpus.json 现读</div>")
 
         analyze_btn.click(do_analyze, [analysis_game], [analysis_report])
+        upload_btn.click(do_analyze_upload, [upload_file, upload_url], [analysis_report])
         scan_btn.click(do_scan, [game, arm, policy, seed], [embed, verdict, state_tbl, stream, pack_state]) \
             .then(lambda p: gr.update(value=p) if p else gr.update(), pack_state, pack_out)
         replay_btn.click(do_replay, [pack_state, paste], [replay_md, replay_json])
