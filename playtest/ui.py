@@ -390,6 +390,42 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 .file-preview .file-size,.file-preview td{color:var(--pt-muted)!important;}
 .file-preview svg,.upload-container svg{fill:var(--pt-muted)!important;color:var(--pt-muted)!important;}
 .selected,.tab-nav button.selected{color:var(--pt-cyan)!important;}
+/* empty-state pipeline */
+.pt-empty{padding:26px 22px;display:flex;flex-direction:column;gap:18px;min-height:340px;justify-content:center;}
+.pt-empty-title{font:700 12px ui-monospace,'Cascadia Code',Consolas,monospace;letter-spacing:.2em;color:var(--pt-muted);text-transform:uppercase;}
+.pt-steps{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;}
+.pt-step{flex:1;min-width:110px;background:var(--pt-surface2);border:1px solid var(--pt-border);border-radius:12px;
+  padding:12px 12px;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,transform .15s;}
+.pt-step:hover{border-color:var(--pt-accent);transform:translateY(-2px);}
+.pt-step-n{font:700 11px ui-monospace,monospace;color:var(--pt-cyan);border:1px solid rgba(34,211,238,.35);
+  width:20px;height:20px;border-radius:6px;display:grid;place-items:center;}
+.pt-step-t{font-weight:700;color:var(--pt-text);font-size:14px;}
+.pt-step-d{color:var(--pt-muted);font-size:11.5px;}
+.pt-step-arrow{align-self:center;color:var(--pt-accent);font-size:16px;}
+.pt-empty-hint{color:var(--pt-muted);font-size:13px;}
+.pt-empty-hint b{color:var(--pt-accent);}
+/* motion */
+@keyframes pt-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pt-drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(2%,1%,0) scale(1.05)}100%{transform:translate3d(0,0,0) scale(1)}}
+@keyframes pt-pulse{0%,100%{box-shadow:0 0 18px rgba(79,140,255,.40)}50%{box-shadow:0 0 30px rgba(34,211,238,.65)}}
+@keyframes pt-blink{0%,100%{opacity:1}50%{opacity:.35}}
+.gradio-container::before{animation:pt-drift 26s ease-in-out infinite;}
+.pt-header{animation:pt-rise .5s ease both;}
+.status-banner{animation:pt-rise .5s .08s ease both;}
+.rail{animation:pt-rise .55s .14s ease both;}
+.stage-col{animation:pt-rise .55s .2s ease both;}
+.console-tabs{animation:pt-rise .55s .26s ease both;}
+.evidence{animation:pt-rise .6s .32s ease both;}
+.pt-logo{animation:pt-pulse 3.2s ease-in-out infinite;}
+.pt-badge::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pt-ok);
+  margin-right:6px;animation:pt-blink 2s ease-in-out infinite;}
+.step-btn:active{transform:translateY(0) scale(.985);}
+.panel{transition:border-color .15s ease,box-shadow .15s ease;}
+.panel:hover{border-color:#33405a!important;box-shadow:0 8px 26px rgba(0,0,0,.4)!important;}
+@media (prefers-reduced-motion: reduce){
+  .gradio-container::before,.pt-logo,.pt-badge::before{animation:none!important;}
+  .pt-header,.status-banner,.rail,.stage-col,.console-tabs,.evidence{animation:none!important;}
+}
 """
 
 _HEADER = """
@@ -400,6 +436,26 @@ _HEADER = """
   <div class="pt-brand"><div class="pt-name">Play<em>Test</em></div>
     <div class="pt-tag">AI 试玩员 · Autonomous Game Playtester · 读状态 → 定动作 → 判缺陷 → 复现 → 修复 → 回归</div></div>
   <div class="pt-badges"><span class="pt-badge">GSPP v0.1</span><span class="pt-badge v">可复现验证</span><span class="pt-badge">MIT</span></div>
+</div>
+"""
+
+_EMPTY_STATE = """
+<div class="pt-empty">
+  <div class="pt-empty-title"> Autonomous Playtest Pipeline</div>
+  <div class="pt-steps">
+    <div class="pt-step"><span class="pt-step-n">1</span><span class="pt-step-t">读状态</span><span class="pt-step-d">GSPP 钩子 / 兜底指纹</span></div>
+    <div class="pt-step-arrow">→</div>
+    <div class="pt-step"><span class="pt-step-n">2</span><span class="pt-step-t">定动作</span><span class="pt-step-d">策略决策 · 可解释</span></div>
+    <div class="pt-step-arrow">→</div>
+    <div class="pt-step"><span class="pt-step-n">3</span><span class="pt-step-t">判缺陷</span><span class="pt-step-d">六类判据 · 诚实负</span></div>
+    <div class="pt-step-arrow">→</div>
+    <div class="pt-step"><span class="pt-step-n">4</span><span class="pt-step-t">复现</span><span class="pt-step-d">逐帧哈希 · 可进 CI</span></div>
+    <div class="pt-step-arrow">→</div>
+    <div class="pt-step"><span class="pt-step-n">5</span><span class="pt-step-t">修复</span><span class="pt-step-d">模型/人工 · 标明来源</span></div>
+    <div class="pt-step-arrow">→</div>
+    <div class="pt-step"><span class="pt-step-n">6</span><span class="pt-step-t">回归</span><span class="pt-step-d">其余种子 · 确认不红</span></div>
+  </div>
+  <div class="pt-empty-hint">在左侧选择夹具与缺陷臂，点击 <b>① 开始试玩</b> —— 游戏画面与实时结论将在此呈现。</div>
 </div>
 """
 
@@ -439,7 +495,7 @@ def build() -> gr.Blocks:
                 replay_btn = gr.Button("② 一键复现", elem_classes=["step-btn", "step-2"])
                 fix_btn = gr.Button("③ 自动修复", elem_classes=["step-btn", "step-3"])
             with gr.Column(scale=3, elem_classes=["stage-col"]):
-                embed = gr.HTML("", label="游戏画面", elem_classes=["stage"])
+                embed = gr.HTML(_EMPTY_STATE, label="游戏画面", elem_classes=["stage"])
                 verdict = gr.Markdown("", elem_classes=["panel"])
                 state_tbl = gr.Markdown("", elem_classes=["panel"])
                 stream = gr.Markdown("", elem_classes=["panel"])
