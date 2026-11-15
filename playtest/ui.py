@@ -419,8 +419,11 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 .pt-footer{margin-top:22px;text-align:center;color:var(--pt-muted);font:500 12px ui-monospace,'Cascadia Code',Consolas,monospace;}
 /* 强制深色：Gradio 残留浅色的标签 pill / 文件组件 / 上传区 */
 .label,label>span,.block-label,.file-preview label,.upload-container .label{background:transparent!important;color:var(--pt-muted)!important;border:none!important;}
-[class*="label"]{background:transparent!important;color:var(--pt-muted)!important;}
-[class*="label"] *{color:var(--pt-muted)!important;}
+[class*="label"]{background:transparent!important;background-color:transparent!important;background-image:none!important;color:var(--pt-muted)!important;border:none!important;box-shadow:none!important;}
+[class*="label"] *{color:var(--pt-muted)!important;background:transparent!important;}
+.block-label,.gradio-container label>span,span[data-testid="block-label"],.form .label{
+  background:transparent!important;background-color:transparent!important;background-image:none!important;
+  color:var(--pt-muted)!important;border:none!important;box-shadow:none!important;padding:0!important;}
 .file-preview,.file-preview table,.file-preview td,.file-preview tr,.file-preview tbody,.upload-container,.file-upload{background:var(--pt-surface2)!important;color:var(--pt-text)!important;border-color:var(--pt-border)!important;}
 .file-preview a,.file-name,.file-preview .file-name{color:var(--pt-cyan)!important;}
 .file-preview .file-size,.file-preview td{color:var(--pt-muted)!important;}
@@ -532,21 +535,24 @@ def _mascot(size: int) -> str:
     )
 
 
-_HERO = """
+_CREATOR_HERO = """
 <div class="pt-hero">
   <div class="pt-mascot">""" + _mascot(64) + """</div>
   <div class="pt-hero-body">
-    <div class="pt-hero-title">让 AI 替你把游戏玩一遍，<em>自动找出藏着的 bug</em></div>
-    <div class="pt-hero-sub">PlayTest 是一个「AI 试玩员」：它自己打开游戏、自己操作、自己判断哪里出了问题，
-      还能证明这个 bug 任何人都能重现，并给出修复补丁。<b>你只需要点三下。</b></div>
+    <div class="pt-hero-title">上传你的游戏，<em>AI 帮你体检＋出优化方案</em></div>
+    <div class="pt-hero-sub">AI 会自己玩一遍你的游戏、读懂它的代码，给一份<b>人话体检报告</b>：
+      哪里有报错崩溃（可复现修复）、哪里能改进（玩法/平衡/UX/代码）。先拿下面的精品演示试试。</div>
     <div class="pt-hero-chips">
-      <span class="pt-chip">🕹️ 自己玩 · 不用你动手</span>
-      <span class="pt-chip">🔍 找出 5 类常见 bug</span>
-      <span class="pt-chip">🔁 谁都能重现 · 可进 CI</span>
-      <span class="pt-chip">🛠️ 给补丁 · 标明模型还是人工</span>
+      <span class="pt-chip">🎮 真实精品演示 · 2048</span>
+      <span class="pt-chip">📋 人话体检报告</span>
+      <span class="pt-chip">💡 优化建议 · 引用代码</span>
+      <span class="pt-chip">🔧 报错可复现修复</span>
     </div>
   </div>
 </div>
+"""
+
+_GUIDE = """
 <div class="pt-guide">
   <div class="pt-guide-title">三步上手 · 跟着点就行</div>
   <div class="pt-guide-steps">
@@ -597,14 +603,46 @@ def _theme() -> gr.themes.Base:
     )
 
 
+def do_analyze(game: str) -> str:
+    from .analyze import analyze_game, render_report_md
+    gdir = GAMES_DIR / game
+    src = gdir / "original" if (gdir / "original").exists() else gdir
+    if not _BROWSER_SLOT.acquire(timeout=90):
+        return "⏳ 前面还有任务在跑（2 vCPU 只允许一个浏览器），请稍后重试。"
+    try:
+        ep = _pw(run_episode, url_for(game, ""), 20261105,
+                 POLICIES["curiosity"](seed=20261105), max_steps=20)
+    finally:
+        _BROWSER_SLOT.release()
+    if ep.error:
+        # 真实游戏可能含跳转外链/重载，试玩中断时仍基于代码阅读出报告（诚实标注，不伪装实跑）。
+        report = analyze_game(src, None, _client)
+        return render_report_md(report) + f"\n\n> ⚠️ 试玩中断（`{ep.error}`），以上建议基于代码阅读。"
+    return render_report_md(analyze_game(src, ep, _client))
+
+
 def build() -> gr.Blocks:
     names = game_names()
     arms = [(lbl, val) for lst in ARMS.values() for (lbl, val) in lst]
 
     with gr.Blocks(title="PlayTest · AI 试玩员") as demo:
         gr.HTML(_HEADER)
-        gr.HTML(_HERO)
+        gr.HTML(_CREATOR_HERO)
         llm_banner = gr.Markdown(_llm_banner(), elem_classes=["status-banner"])
+        with gr.Row(elem_classes=["console"]):
+            with gr.Column(scale=1, elem_classes=["rail"]):
+                gr.HTML("<div class='rail-title'>AI 体检 · 选个游戏</div>")
+                analysis_game = gr.Dropdown(["2048"] + [g for g in names if g != "2048"],
+                                            value="2048", label="分析的游戏",
+                                            info="选一个游戏让 AI 试玩＋读码分析。2048 是 MIT 精品演示，零接入即可分析。")
+                analyze_btn = gr.Button("🔍 AI 试玩分析", variant="primary", elem_classes=["step-btn", "step-1"])
+                gr.Markdown("上传你自己的游戏（开发中也可以）即将支持。", elem_classes=["preset-hint"])
+            with gr.Column(scale=3, elem_classes=["stage-col"]):
+                analysis_report = gr.Markdown(
+                    "点左边 **🔍 AI 试玩分析**，AI 会玩一遍＋读码，给出人话体检报告（优化建议＋报错修复）。",
+                    elem_classes=["panel"])
+        gr.HTML("<div class='rail-title' style='margin:20px 0 10px'>开发者模式 · 完整复现闭环</div>")
+        gr.HTML(_GUIDE)
         with gr.Row(elem_classes=["console"]):
             with gr.Column(scale=1, elem_classes=["rail"]):
                 gr.HTML("<div class='rail-title'>一键演示 · 点一下选好场景</div>")
@@ -629,8 +667,9 @@ def build() -> gr.Blocks:
             with gr.Column(scale=3, elem_classes=["stage-col"]):
                 embed = gr.HTML(_EMPTY_STATE, label="游戏画面", elem_classes=["stage"])
                 verdict = gr.Markdown("", elem_classes=["panel"])
-                state_tbl = gr.Markdown("", elem_classes=["panel"])
-                stream = gr.Markdown("", elem_classes=["panel"])
+                with gr.Accordion("开发者细节（原始状态 / 决策流 / 技术披露）", open=False):
+                    state_tbl = gr.Markdown("", elem_classes=["panel"])
+                    stream = gr.Markdown("", elem_classes=["panel"])
 
         with gr.Tabs(elem_classes=["console-tabs"]):
             with gr.Tab("复现包"):
@@ -704,6 +743,7 @@ def build() -> gr.Blocks:
         gr.Markdown(_static_evidence(), elem_classes=["panel", "evidence"])
         gr.HTML("<div class='pt-footer'>PlayTest · 录屏不是证据，可复现才是 · MIT · evidence/corpus.json 现读</div>")
 
+        analyze_btn.click(do_analyze, [analysis_game], [analysis_report])
         scan_btn.click(do_scan, [game, arm, policy, seed], [embed, verdict, state_tbl, stream, pack_state]) \
             .then(lambda p: gr.update(value=p) if p else gr.update(), pack_state, pack_out)
         replay_btn.click(do_replay, [pack_state, paste], [replay_md, replay_json])

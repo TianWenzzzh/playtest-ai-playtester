@@ -233,7 +233,11 @@ def main() -> int:
                     )
                     check(
                         "首屏含白话三步上手引导",
-                        "三步上手" in landing_text and "让 AI 替你把游戏玩一遍" in landing_text,
+                        "三步上手" in landing_text and "上传你的游戏" in landing_text,
+                    )
+                    check(
+                        "首屏含创作者分析入口",
+                        "AI 试玩分析" in landing_text and "分析的游戏" in landing_text,
                     )
                     missing = [n for n in static_evidence_needles() if n not in landing_text]
                     check("首屏展示真实封存台账且标明非实时", not missing, "缺：" + repr(missing))

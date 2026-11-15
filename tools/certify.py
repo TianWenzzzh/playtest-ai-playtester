@@ -37,6 +37,7 @@ FAST_FILES = (
     "tests/m7_outward_wording.py",
     "tests/m8_llm_client.py",
     "tests/m9_hashing.py",
+    "tests/m10_analyze.py",
 )
 FULL_EXTRA_FILES = (
     "tests/m3_offline.py",
