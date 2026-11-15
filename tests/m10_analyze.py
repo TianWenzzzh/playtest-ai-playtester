@@ -45,6 +45,19 @@ def test_degraded_when_unavailable():
     assert r.degraded and r.suggestions == []
 
 
+def test_degraded_on_complete_none():
+    # 端点可用但调用失败（超时/HTTPError/解析失败 → complete 返回 None）：
+    # 必须降级标注，不能静默空报告伪装实跑。
+    c = FakeClient(None, available=True)
+    c.cfg = type("C", (), {"available": lambda self: True,
+                           "reason_unavailable": lambda self: ""})()
+    r = analyze_game(GAMES, None, c)
+    assert r.degraded, "complete→None 必须 degraded=True"
+    assert r.suggestions == []
+    md = render_report_md(r)
+    assert "暂不可用" in md or "失败" in md
+
+
 def test_report_md_labels_advice():
     r = analyze_game(GAMES, None, FakeClient(GOOD))
     md = render_report_md(r)
@@ -62,6 +75,15 @@ def test_analyze_requests_large_token_budget():
     c = FakeClient(GOOD)
     analyze_game(GAMES, None, c)
     assert c.last_max_tokens is not None and c.last_max_tokens >= 1000
+
+
+def test_bundled_2048_self_contained():
+    # P1-1 回归门：srcdoc 内联产物不得含外部 @import 或非 data: url()（相对路径会 404）。
+    import re
+    bundled = pathlib.Path(__file__).resolve().parent.parent / "games" / "2048" / "index.html"
+    text = bundled.read_text(encoding="utf-8")
+    leftover = re.findall(r"@import[^;]+;|url\((?!['\"]?data:)[^)]+\)", text)
+    assert not leftover, f"bundled 2048 残留外部引用: {leftover[:5]}"
 
 
 if __name__ == "__main__":

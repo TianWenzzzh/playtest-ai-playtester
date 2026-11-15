@@ -16,6 +16,9 @@ OUT = ROOT / "games" / "2048" / "index.html"
 def bundle() -> str:
     html = (SRC / "index.html").read_text(encoding="utf-8")
     css = (SRC / "style" / "main.css").read_text(encoding="utf-8")
+    # 剥离外部 @import（fonts/clear-sans.css 只在 original/ 下，srcdoc 相对路径会 404）；
+    # 字体回退到 CSS 字体栈里的系统字体，产物真正 0 外部依赖。
+    css = re.sub(r"@import[^;]+;", "", css)
     html = html.replace(
         '<link href="style/main.css" rel="stylesheet" type="text/css">',
         f"<style>{css}</style>",
@@ -37,5 +40,10 @@ def bundle() -> str:
 
 
 if __name__ == "__main__":
-    OUT.write_text(bundle(), encoding="utf-8")
-    print("bundled", OUT, OUT.stat().st_size, "bytes")
+    out = bundle()
+    # 自包含断言：产物不得含外部 @import 或非 data: 的 url()（srcdoc 相对路径会 404）。
+    leftover = re.findall(r"@import[^;]+;|url\((?!['\"]?data:)[^)]+\)", out)
+    if leftover:
+        raise SystemExit(f"bundle 非自包含，残留外部引用: {leftover[:5]}")
+    OUT.write_text(out, encoding="utf-8")
+    print("bundled", OUT, OUT.stat().st_size, "bytes (self-contained)")

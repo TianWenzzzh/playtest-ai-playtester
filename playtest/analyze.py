@@ -37,11 +37,25 @@ class AnalysisReport:
 
 
 def _read_sources(game_dir: Path, limit: int = 14000) -> str:
-    parts = []
-    for p in sorted(game_dir.rglob("*")):
-        if p.is_file() and p.suffix in (".html", ".js", ".css"):
-            parts.append(f"// {p.relative_to(game_dir)}\n"
-                         + p.read_text(encoding="utf-8", errors="replace"))
+    # 优先核心游戏逻辑（玩法/平衡/输入/渲染），polyfill 与 HTML/CSS 排后，
+    # 避免截断预算被兼容代码吃掉、读不到真正的游戏机制。
+    core = ("game_manager", "grid", "tile", "html_actuator", "keyboard_input_manager",
+            "local_storage_manager", "application")
+
+    def prio(p: Path) -> tuple:
+        name = p.stem
+        if p.suffix == ".js" and any(c in name for c in core):
+            return (0, name)
+        if p.suffix == ".js" and "polyfill" in name:
+            return (3, name)
+        if p.suffix == ".js":
+            return (1, name)
+        return (2, name)
+
+    files = [p for p in game_dir.rglob("*")
+             if p.is_file() and p.suffix in (".html", ".js", ".css")]
+    parts = [f"// {p.relative_to(game_dir)}\n" + p.read_text(encoding="utf-8", errors="replace")
+             for p in sorted(files, key=prio)]
     return "\n\n".join(parts)[:limit]
 
 
@@ -70,8 +84,14 @@ def analyze_game(game_dir: Path, episode: Any, client: LLMClient) -> AnalysisRep
                               degraded=True, degrade_reason=client.cfg.reason_unavailable())
     obs = {"stats": stats, "defect": detected[0] if detected else None,
            "render_note": getattr(episode, "render_note", "") if episode else ""}
-    data = parse_json_object(client.complete(_prompt(_read_sources(game_dir), obs),
-                                             force_json=True, max_tokens=2000)) or {}
+    raw = client.complete(_prompt(_read_sources(game_dir), obs), force_json=True, max_tokens=2000)
+    data = parse_json_object(raw)
+    if data is None:
+        # 端点可用但调用失败（超时/HTTPError）或返回无法解析 ⇒ 降级标注，不静默空报告伪装实跑。
+        err = getattr(getattr(client, "stat", None), "last_error", "") or "模型返回无法解析"
+        return AnalysisReport(summary="（模型调用失败，仅给出确定性检测；优化建议暂不可用）",
+                              detected_issues=detected, play_stats=stats,
+                              degraded=True, degrade_reason=str(err)[:120])
     suggestions = []
     for s in data.get("suggestions", []):
         if not isinstance(s, dict) or not s.get("code_ref"):
