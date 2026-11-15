@@ -628,7 +628,28 @@ def do_analyze(game: str) -> str:
     return _analyze_dir(GAMES_DIR / game)
 
 
+def _url_is_public(u: str) -> bool:
+    """SSRF 防护：解析主机所有地址，任一为内网/回环/链路本地/保留/组播即拒。
+    注：仅防直接内网地址；DNS rebinding 需固定解析 IP，超出本工具范围（已记限制）。"""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    host = urlparse(u).hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+    return True
+
+
 def do_analyze_upload(file, url) -> str:
+    import os
     import shutil
     import urllib.request
     import uuid
@@ -640,20 +661,31 @@ def do_analyze_upload(file, url) -> str:
         if fp.suffix.lower() == ".zip":
             with zipfile.ZipFile(fp) as z:
                 base = up.resolve()
-                for m in z.namelist():
-                    if not str((up / m).resolve()).startswith(str(base)):
+                total = 0
+                for info in z.infolist():
+                    dest = (up / info.filename).resolve()
+                    if os.path.commonpath([str(base), str(dest)]) != str(base):
                         return "❌ zip 含越界路径，已拒绝。"
+                    total += info.file_size
+                    if total > 20_000_000:
+                        return "❌ zip 解压后超过 20MB，已拒绝。"
                 z.extractall(up)
         else:
+            if fp.stat().st_size > 5_000_000:
+                return "❌ HTML 文件超过 5MB，已拒绝。"
             shutil.copy(fp, up / "index.html")
     elif url and url.strip():
         u = url.strip()
         if not u.startswith(("http://", "https://")):
             return "❌ URL 须以 http:// 或 https:// 开头。"
+        if not _url_is_public(u):
+            return "❌ URL 指向内网/回环/保留地址，已拒绝（仅支持公网游戏）。"
         try:
             req = urllib.request.Request(u, headers={"User-Agent": "PlayTest-Analyzer"})
             with urllib.request.urlopen(req, timeout=20) as r:
-                html = r.read(2_000_000)
+                html = r.read(2_000_001)
+            if len(html) > 2_000_000:
+                return "❌ 页面超过 2MB，已拒绝。"
             (up / "index.html").write_bytes(html)
         except Exception as exc:
             return f"❌ 抓取 URL 失败：`{exc}`"

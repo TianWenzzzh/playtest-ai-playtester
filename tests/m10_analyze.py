@@ -115,6 +115,30 @@ def test_upload_zip_slip_rejected():
         assert "越界" in msg or "❌" in msg
 
 
+def test_upload_ssrf_loopback_rejected():
+    from playtest.ui import do_analyze_upload
+    msg = do_analyze_upload(None, "http://127.0.0.1/game.html")
+    assert "内网" in msg or "回环" in msg
+
+
+def test_upload_ssrf_private_rejected():
+    from playtest.ui import do_analyze_upload
+    msg = do_analyze_upload(None, "http://192.168.1.1/game.html")
+    assert "内网" in msg or "回环" in msg
+
+
+def test_upload_zip_bomb_rejected():
+    import tempfile
+    import zipfile
+    from playtest.ui import do_analyze_upload
+    with tempfile.TemporaryDirectory() as td:
+        zp = pathlib.Path(td) / "bomb.zip"
+        with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("big.html", b"\0" * 21_000_000)  # 解压 21MB > 20MB 限
+        msg = do_analyze_upload(str(zp), "")
+        assert "20MB" in msg or "❌" in msg
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
