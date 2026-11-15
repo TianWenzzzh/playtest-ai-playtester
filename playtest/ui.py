@@ -204,10 +204,8 @@ def do_scan(game: str, arm: str, policy: str, seed: float) -> tuple[str, str, st
         if not res.defect:
             verdict = ("## 本局结论：**未开火** ✅\n\n"
                        "> 💡 **人话版**：这一局 AI 没发现 bug。"
-                       + ("这是**干净臂**（正常游戏），沉默是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
-                          else "这一局没找到缺陷 —— 换个种子或换种策略再试。") + "\n\n"
-                       + ("这是**干净臂**，沉默是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
-                          else "这一局没找到缺陷 —— 换种子或换策略再试。"))
+                       + ("这是**干净臂**（正常游戏），没报错就是正确行为。" if arm.endswith("none") or "maxgap=3" in arm
+                          else "这一局没找到缺陷 —— 换个种子或换种策略再试。"))
             return frame_html, verdict, _state_table(res.pack["initial_state"]["snapshot"] if res.pack else {}), \
                 f"步数 {res.steps} · 见到状态 {res.distinct_states} · 探测 {res.probes} 次 · {res.wall_ms} ms", None
 
@@ -266,8 +264,8 @@ def do_replay(pack_path: str | None, pasted: str) -> tuple[str, str]:
 
     ok = v["replayed"]
     head = ("## 回放校验：**通过** ✅\n\n" if ok else "## 回放校验：**不一致** 🔴\n\n")
-    plain = ("> 💡 **人话版**：换台机器、换个时间重跑，游戏逐帧走出一模一样的过程——"
-             "这个 bug 铁证如山，谁都能重现。\n\n" if ok else
+    plain = ("> 💡 **人话版**：新开一个浏览器重跑，游戏逐帧走出一模一样的过程——"
+             "这个 bug 铁证如山，拿这份记录谁都能重现。\n\n" if ok else
              "> 💡 **人话版**：这次重跑和原来对不上，这份记录不能当证据。\n\n")
     detail = (
         plain
@@ -553,7 +551,7 @@ _HERO = """
   <div class="pt-guide-title">三步上手 · 跟着点就行</div>
   <div class="pt-guide-steps">
     <div class="pt-gstep"><span class="pt-gn">1</span><div><b>点「① 开始试玩」</b><span>AI 自动玩游戏、找出藏着的 bug，画面和「人话版」结论实时出现在右边。</span></div></div>
-    <div class="pt-gstep"><span class="pt-gn">2</span><div><b>点「② 一键复现」</b><span>证明这个 bug 不是偶然：换台机器重跑，逐帧一模一样。</span></div></div>
+    <div class="pt-gstep"><span class="pt-gn">2</span><div><b>点「② 一键复现」</b><span>证明这个 bug 不是偶然：新开一个浏览器重跑，逐帧一模一样。</span></div></div>
     <div class="pt-gstep"><span class="pt-gn">3</span><div><b>点「③ 自动修复」</b><span>给出修复补丁并验证「红转绿」，还会检查别处没被改坏。</span></div></div>
   </div>
 </div>
