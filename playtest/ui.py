@@ -292,98 +292,221 @@ def do_fix(game: str, pack_path: str | None, old: str, new: str) -> tuple[str, s
     return ("\n".join(md), json.dumps(res.to_json(), ensure_ascii=False, indent=2))
 
 
+# ── 视觉系统：深色智能体控制台（借鉴 Claude / Qoder / DeepSeek 的控制台语言）──
+# 色板取自"深夜调试终端"：深海军蓝底 + 电蓝主色 + 紫罗兰次色 + 琥珀警示 + 绿成功 + 红危险。
+_CSS = """
+:root{
+  --pt-bg:#0b0e14; --pt-surface:#12161f; --pt-surface2:#171c28; --pt-border:#242c3d;
+  --pt-text:#e7eaf2; --pt-muted:#8f97ab; --pt-accent:#4f8cff; --pt-accent2:#8b7bff;
+  --pt-ok:#34d399; --pt-warn:#fbbf24; --pt-danger:#f87171; --pt-cyan:#22d3ee;
+}
+.gradio-container{max-width:1480px!important;margin:0 auto!important;padding:20px 26px 40px!important;
+  background:var(--pt-bg)!important;font-family:system-ui,-apple-system,'Segoe UI',sans-serif!important;color:var(--pt-text)!important;}
+.gradio-container::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(900px 420px at 12% -8%,rgba(79,140,255,.14),transparent 60%),
+             radial-gradient(800px 400px at 88% -10%,rgba(139,123,255,.12),transparent 60%),
+             radial-gradient(700px 500px at 50% 110%,rgba(34,211,238,.06),transparent 60%);}
+.gradio-container>*{position:relative;z-index:1;}
+footer{display:none!important;}
+/* header */
+.pt-header{display:flex;align-items:center;gap:16px;padding:18px 22px;margin-bottom:14px;
+  background:linear-gradient(120deg,#141a29,#10141d 55%,#131a2b);border:1px solid var(--pt-border);
+  border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.35);}
+.pt-logo{width:46px;height:46px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--pt-accent),var(--pt-accent2));box-shadow:0 0 22px rgba(79,140,255,.45);}
+.pt-name{font-size:22px;font-weight:800;letter-spacing:.2px;color:#fff;}
+.pt-name em{font-style:normal;color:var(--pt-cyan);}
+.pt-tag{font-size:12.5px;color:var(--pt-muted);margin-top:2px;}
+.pt-badges{margin-left:auto;display:flex;gap:8px;}
+.pt-badge{font:600 11px/1 ui-monospace,'Cascadia Code',Consolas,monospace;color:var(--pt-cyan);border:1px solid rgba(34,211,238,.35);
+  background:rgba(34,211,238,.08);padding:6px 10px;border-radius:999px;}
+.pt-badge.v{color:var(--pt-accent2);border-color:rgba(139,123,255,.35);background:rgba(139,123,255,.08);}
+/* status banner */
+.status-banner{border:1px solid var(--pt-border);border-left:3px solid var(--pt-ok);border-radius:12px;
+  background:var(--pt-surface)!important;padding:10px 16px!important;margin-bottom:14px!important;}
+.status-banner.warn{border-left-color:var(--pt-warn);}
+.status-banner .prose,.status-banner p{font-size:13px!important;color:var(--pt-muted)!important;}
+/* layout */
+.console{gap:16px!important;align-items:stretch!important;}
+.rail{background:var(--pt-surface)!important;border:1px solid var(--pt-border)!important;border-radius:16px!important;
+  padding:18px!important;gap:12px!important;box-shadow:0 8px 26px rgba(0,0,0,.3);}
+.rail-title{font:700 11px/1 ui-monospace,'Cascadia Code',Consolas,monospace;letter-spacing:.18em;color:var(--pt-muted);
+  text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+.rail-title::after{content:"";flex:1;height:1px;background:var(--pt-border);}
+.rail .block{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;}
+.rail label span,.rail .label{color:var(--pt-muted)!important;font-size:12px!important;font-weight:600!important;}
+.rail input,.rail select,.rail .wrap-inner{background:var(--pt-surface2)!important;border:1px solid var(--pt-border)!important;
+  color:var(--pt-text)!important;border-radius:10px!important;}
+.rail input:focus,.rail select:focus{border-color:var(--pt-accent)!important;box-shadow:0 0 0 3px rgba(79,140,255,.18)!important;}
+/* step buttons */
+.step-btn{border-radius:12px!important;font-weight:700!important;font-size:14px!important;padding:12px 16px!important;
+  border:1px solid var(--pt-border)!important;background:var(--pt-surface2)!important;color:var(--pt-text)!important;
+  transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease!important;text-align:left!important;}
+.step-btn:hover{transform:translateY(-1px);border-color:var(--pt-accent)!important;box-shadow:0 6px 18px rgba(79,140,255,.25)!important;}
+.step-1{background:linear-gradient(120deg,var(--pt-accent),#3b6fe0)!important;border:none!important;color:#fff!important;
+  box-shadow:0 6px 20px rgba(79,140,255,.35)!important;}
+.step-2{border-color:rgba(34,211,238,.4)!important;color:var(--pt-cyan)!important;}
+.step-3{border-color:rgba(139,123,255,.4)!important;color:var(--pt-accent2)!important;}
+/* stage + panels */
+.stage-col{gap:14px!important;}
+.stage{background:var(--pt-surface)!important;border:1px solid var(--pt-border)!important;border-radius:16px!important;
+  padding:14px!important;box-shadow:0 8px 26px rgba(0,0,0,.3);}
+.stage iframe{border:1px solid var(--pt-border)!important;border-radius:12px!important;background:#0d1119!important;}
+.panel{background:var(--pt-surface)!important;border:1px solid var(--pt-border)!important;border-radius:14px!important;
+  padding:14px 18px!important;box-shadow:0 6px 20px rgba(0,0,0,.25);}
+.panel .prose h2{font-size:16px!important;color:#fff!important;border-bottom:1px solid var(--pt-border);padding-bottom:8px;}
+.panel .prose,.panel p,.panel li{color:var(--pt-text)!important;font-size:13.5px!important;}
+.panel code,.prose code{font-family:ui-monospace,'Cascadia Code',Consolas,monospace!important;background:var(--pt-surface2)!important;
+  color:var(--pt-cyan)!important;border:1px solid var(--pt-border);border-radius:6px;padding:1px 6px;font-size:12px!important;}
+.prose table{border-collapse:collapse!important;width:100%;}
+.prose th{background:var(--pt-surface2)!important;color:var(--pt-muted)!important;font:600 12px ui-monospace,'Cascadia Code',Consolas,monospace!important;
+  border:1px solid var(--pt-border)!important;padding:7px 10px!important;text-align:left;}
+.prose td{border:1px solid var(--pt-border)!important;padding:7px 10px!important;color:var(--pt-text)!important;font-size:12.5px!important;}
+.prose pre{background:var(--pt-surface2)!important;border:1px solid var(--pt-border)!important;border-radius:10px!important;}
+.prose pre code{color:var(--pt-text)!important;border:none;background:transparent!important;}
+/* tabs */
+.console-tabs .tab-nav{border-bottom:1px solid var(--pt-border)!important;gap:4px!important;margin-bottom:14px!important;}
+.console-tabs .tab-nav button{background:transparent!important;border:none!important;border-bottom:2px solid transparent!important;
+  color:var(--pt-muted)!important;font-weight:600!important;font-size:13.5px!important;padding:10px 16px!important;border-radius:0!important;}
+.console-tabs .tab-nav button.selected{color:var(--pt-cyan)!important;border-bottom-color:var(--pt-cyan)!important;
+  background:linear-gradient(180deg,transparent,rgba(34,211,238,.07))!important;}
+.tabitem{background:transparent!important;border:none!important;padding:0!important;}
+/* textareas / json */
+textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var(--pt-border)!important;color:var(--pt-text)!important;
+  border-radius:10px!important;font-family:ui-monospace,'Cascadia Code',Consolas,monospace!important;font-size:12.5px!important;}
+/* scrollbars */
+*::-webkit-scrollbar{width:10px;height:10px;}
+*::-webkit-scrollbar-track{background:var(--pt-bg);}
+*::-webkit-scrollbar-thumb{background:var(--pt-border);border-radius:8px;border:2px solid var(--pt-bg);}
+*::-webkit-scrollbar-thumb:hover{background:var(--pt-accent);}
+.evidence{margin-top:16px!important;}
+.pt-footer{margin-top:22px;text-align:center;color:var(--pt-muted);font:500 12px ui-monospace,'Cascadia Code',Consolas,monospace;}
+/* 强制深色：Gradio 残留浅色的标签 pill / 文件组件 / 上传区 */
+.label,label>span,.block-label,.file-preview label,.upload-container .label{background:transparent!important;color:var(--pt-muted)!important;border:none!important;}
+[class*="label"]{background:transparent!important;color:var(--pt-muted)!important;}
+[class*="label"] *{color:var(--pt-muted)!important;}
+.file-preview,.file-preview table,.file-preview td,.file-preview tr,.file-preview tbody,.upload-container,.file-upload{background:var(--pt-surface2)!important;color:var(--pt-text)!important;border-color:var(--pt-border)!important;}
+.file-preview a,.file-name,.file-preview .file-name{color:var(--pt-cyan)!important;}
+.file-preview .file-size,.file-preview td{color:var(--pt-muted)!important;}
+.file-preview svg,.upload-container svg{fill:var(--pt-muted)!important;color:var(--pt-muted)!important;}
+.selected,.tab-nav button.selected{color:var(--pt-cyan)!important;}
+"""
+
+_HEADER = """
+<div class="pt-header">
+  <div class="pt-logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+    <path d="M6 4l12 8-12 8V4z" fill="#fff" opacity=".95"/>
+    <circle cx="18.5" cy="5.5" r="2.4" fill="#22d3ee"/></svg></div>
+  <div class="pt-brand"><div class="pt-name">Play<em>Test</em></div>
+    <div class="pt-tag">AI 试玩员 · Autonomous Game Playtester · 读状态 → 定动作 → 判缺陷 → 复现 → 修复 → 回归</div></div>
+  <div class="pt-badges"><span class="pt-badge">GSPP v0.1</span><span class="pt-badge v">可复现验证</span><span class="pt-badge">MIT</span></div>
+</div>
+"""
+
+
+def _theme() -> gr.themes.Base:
+    # 用内置 Soft() 作基底（其字体为安全的内置 Font 对象，避免自定义字符串 font
+    # 触发 Gradio6 launch() is_custom_theme 比较崩溃，也不引外部 Google Fonts）。
+    return gr.themes.Soft().set(
+        body_background_fill="#0b0e14", body_text_color="#e7eaf2",
+        block_background_fill="#12161f", block_border_color="#242c3d", block_label_text_color="#8f97ab",
+        block_label_background_fill="transparent", block_label_border_color="transparent",
+        block_label_shadow="none", block_title_text_color="#e7eaf2", border_color_primary="#242c3d", border_color_accent="#4f8cff",
+        button_primary_background_fill="#4f8cff", button_primary_text_color="#ffffff",
+        button_secondary_background_fill="#171c28", button_secondary_text_color="#e7eaf2",
+        input_background_fill="#171c28", input_border_color="#242c3d", input_placeholder_color="#8f97ab",
+        background_fill_primary="#0b0e14", background_fill_secondary="#12161f",
+        color_accent_soft="#171c28", shadow_spread="0px",
+    )
+
+
 def build() -> gr.Blocks:
     names = game_names()
     arms = [(lbl, val) for lst in ARMS.values() for (lbl, val) in lst]
 
     with gr.Blocks(title="PlayTest · AI 试玩员") as demo:
-        gr.Markdown(
-            "# PlayTest · AI 试玩员\n"
-            "给它一个游戏，它自己玩、自己找出卡关，打包成**可以原样重放一遍**的复现包，"
-            "然后自己把代码改对，改完重放确认不红。\n\n"
-            "**主路径只有三个按钮**：`开始试玩` → `一键复现` → `自动修复`。"
-        )
-        llm_banner = gr.Markdown(_llm_banner())
-        gr.Markdown(_static_evidence())
-
-        with gr.Row():
-            with gr.Column(scale=2):
+        gr.HTML(_HEADER)
+        llm_banner = gr.Markdown(_llm_banner(), elem_classes=["status-banner"])
+        with gr.Row(elem_classes=["console"]):
+            with gr.Column(scale=1, elem_classes=["rail"]):
+                gr.HTML("<div class='rail-title'>Control Rail · 控制台</div>")
                 game = gr.Dropdown(names, value=names[0] if names else None, label="夹具游戏")
                 arm = gr.Dropdown(arms, value="?maxgap=6", label="缺陷臂")
                 policy = gr.Dropdown(sorted(POLICIES), value="curiosity", label="策略")
                 seed = gr.Number(value=20261105, precision=0, label="随机种子")
-                scan_btn = gr.Button("① 开始试玩", variant="primary")
-                replay_btn = gr.Button("② 一键复现")
-                fix_btn = gr.Button("③ 自动修复")
-            with gr.Column(scale=3):
-                embed = gr.HTML("", label="游戏画面")
-                verdict = gr.Markdown("")
-                state_tbl = gr.Markdown("")
-                stream = gr.Markdown("")
+                gr.HTML("<div class='rail-title'>Pipeline · 三步闭环</div>")
+                scan_btn = gr.Button("① 开始试玩", variant="primary", elem_classes=["step-btn", "step-1"])
+                replay_btn = gr.Button("② 一键复现", elem_classes=["step-btn", "step-2"])
+                fix_btn = gr.Button("③ 自动修复", elem_classes=["step-btn", "step-3"])
+            with gr.Column(scale=3, elem_classes=["stage-col"]):
+                embed = gr.HTML("", label="游戏画面", elem_classes=["stage"])
+                verdict = gr.Markdown("", elem_classes=["panel"])
+                state_tbl = gr.Markdown("", elem_classes=["panel"])
+                stream = gr.Markdown("", elem_classes=["panel"])
 
-        with gr.Tab("复现包"):
-            pack_state = gr.State(None)
-            pack_out = gr.File(label="下载的复现包")
-            paste = gr.Textbox(label="或粘贴一份复现包 JSON", lines=6, placeholder='{ "schema": "gspp/repro/1", ... }')
-            replay_md = gr.Markdown("")
-            replay_json = gr.JSON(label="verification")
-
-        with gr.Tab("修复补丁"):
-            gr.Markdown(
-                "配了推理端点时补丁由模型生成；**没配时由这里人工提供**，"
-                "此时界面会明确标注『补丁来自人工』，不会把人的成绩记到模型头上。"
-            )
-            old = gr.Textbox(label="old（必须逐字来自源码且全文只出现一次）", lines=3,
-                             value="var gap = i === 0 ? 0 : 1 + Math.floor(Math.random() * G.maxGap);")
-            new = gr.Textbox(label="new", lines=3,
-                             value="var gap = i === 0 ? 0 : 1 + Math.floor(Math.random() * Math.min(G.maxGap, G.reach));")
-            fix_md = gr.Markdown("")
-            fix_json = gr.JSON(label="fix result")
-
-        with gr.Tab("基准与判据"):
-            gr.Markdown(
-                "## 缺陷分类\n\n"
-                "| kind | 判据 | 需要声明 |\n|---|---|---|\n"
-                "| `crash` | 未捕获异常 / 页面错误上升 | — |\n"
-                "| `invariant_violation` | 作者声明的不变量被违反 | `invariants()` |\n"
-                "| `softlock` | horizon 内到不了任何终局：赢不了也死不掉 | `snapshot/restore` + `key` |\n"
-                "| `unwinnable` | 可达终局全为失败 | 同上 |\n"
-                "| `ui_dead_end` | 控件可见可点，派发后指纹不变（含 40 帧二次确认），且整条 click 链上量不到监听器 | 兜底模式 |\n\n"
-                "🔴 探测被 horizon 或预算截断时**只报『该深度内未找到』，不断言『不存在赢的路径』**。\n\n"
-                "## 完整跑法\n"
-                "```bash\npython -m playtest.cli scan games/maze-exit --seeds 20261105\n"
-                "python -m playtest.cli replay out/scan/<pack>.json   # 不可复现则退出码 1，可进 CI\n"
-                "python -m benchmark.run                              # 两臂对照的基准表\n```"
-            )
-            gr.Markdown(_llm_banner())
-
-        with gr.Tab("接入与限制"):
-            gr.Markdown(
-                "## 接入：两种模式\n\n"
-                "**注册模式（实测中位数 29 行）** —— 高保真：\n"
-                "```js\nwindow.__GSPP__.register({\n"
-                "  meta: { id: 'my-game', ticksPerAction: 6 },\n"
-                "  reset: () => newGame(),\n"
-                "  read:  () => ({ level: G.level, score: G.score, hp: G.hp }),\n"
-                "  actions: () => [{ name: 'jump' }, { name: 'wait' }],\n"
-                "  apply: (a) => a.name === 'jump' && tryJump(),\n"
-                "  isOver: (s) => s.hp <= 0 || s.won, isWin: (s) => !!s.won,\n"
-                "  key: (s) => ({ level: s.level, hp: s.hp }),   // 状态等价投影\n"
-                "  snapshot: () => G.serialize(), restore: (st) => G.loadFrom(st)\n});\n```\n\n"
-                "注册块行数**已实测**：11–48 行（中位数 29），非空非注释 11–44 行；"
-                "现读 `python tools/adapter_linecount.py`（限定词不算测量，旧稿那句「约 20」已撤）。\n\n"
-                "**兜底模式（0 行）** —— 什么都没写的游戏自动降级："
-                "从可见文本、按钮 disabled 集合、输入框值、canvas 降采样像素指纹推断状态；"
-                "从可交互元素 + 常用键集推断动作。本仓库 `games/clicker-quest/` 一行协议都没接，"
-                "工具照样能发现那个没有 handler 的按钮并产出可回放复现包。\n\n"
-                "## 已知限制（诚实清单）\n"
-                "1. 虚拟时钟把时间量化到帧栅格 ⇒ 依赖真实墙钟做手感的（节拍、连招窗口）保真度下降。\n"
-                "2. `crypto.getRandomValues` 不受种子控制 ⇒ 用它随机的游戏**不可复现**，工具会明说。\n"
-                "3. WebGL canvas 像素指纹跨 GPU 未必逐位一致 ⇒ 兜底模式跨机复现强度弱于注册模式。\n"
-                "4. 可达性探测受 horizon/预算限制；截断时不下强结论。\n"
-                "5. 状态里带单调计数器又没声明 `key` 的游戏，探测会截断而非误判 —— 宁可不报也不乱报。\n"
-                "6. iframe 内游戏需把 URL 指向内层 frame；跨域 iframe 不支持。"
-            )
+        with gr.Tabs(elem_classes=["console-tabs"]):
+            with gr.Tab("复现包"):
+                pack_state = gr.State(None)
+                pack_out = gr.File(label="下载的复现包")
+                paste = gr.Textbox(label="或粘贴一份复现包 JSON", lines=6, placeholder='{ "schema": "gspp/repro/1", ... }')
+                replay_md = gr.Markdown("", elem_classes=["panel"])
+                replay_json = gr.JSON(label="verification")
+            with gr.Tab("修复补丁"):
+                gr.Markdown(
+                    "配了推理端点时补丁由模型生成；**没配时由这里人工提供**，"
+                    "此时界面会明确标注『补丁来自人工』，不会把人的成绩记到模型头上。",
+                    elem_classes=["panel"])
+                old = gr.Textbox(label="old（必须逐字来自源码且全文只出现一次）", lines=3,
+                                 value="var gap = i === 0 ? 0 : 1 + Math.floor(Math.random() * G.maxGap);")
+                new = gr.Textbox(label="new", lines=3,
+                                 value="var gap = i === 0 ? 0 : 1 + Math.floor(Math.random() * Math.min(G.maxGap, G.reach));")
+                fix_md = gr.Markdown("", elem_classes=["panel"])
+                fix_json = gr.JSON(label="fix result")
+            with gr.Tab("基准与判据"):
+                gr.Markdown(
+                    "## 缺陷分类\n\n"
+                    "| kind | 判据 | 需要声明 |\n|---|---|---|\n"
+                    "| `crash` | 未捕获异常 / 页面错误上升 | — |\n"
+                    "| `invariant_violation` | 作者声明的不变量被违反 | `invariants()` |\n"
+                    "| `softlock` | horizon 内到不了任何终局：赢不了也死不掉 | `snapshot/restore` + `key` |\n"
+                    "| `unwinnable` | 可达终局全为失败 | 同上 |\n"
+                    "| `ui_dead_end` | 控件可见可点，派发后指纹不变（含 40 帧二次确认），且整条 click 链上量不到监听器 | 兜底模式 |\n\n"
+                    "🔴 探测被 horizon 或预算截断时**只报『该深度内未找到』，不断言『不存在赢的路径』**。\n\n"
+                    "## 完整跑法\n"
+                    "```bash\npython -m playtest.cli scan games/maze-exit --seeds 20261105\n"
+                    "python -m playtest.cli replay out/scan/<pack>.json   # 不可复现则退出码 1，可进 CI\n"
+                    "python -m benchmark.run                              # 两臂对照的基准表\n```",
+                    elem_classes=["panel"])
+                gr.Markdown(_llm_banner(), elem_classes=["status-banner"])
+            with gr.Tab("接入与限制"):
+                gr.Markdown(
+                    "## 接入：两种模式\n\n"
+                    "**注册模式（实测中位数 29 行）** —— 高保真：\n"
+                    "```js\nwindow.__GSPP__.register({\n"
+                    "  meta: { id: 'my-game', ticksPerAction: 6 },\n"
+                    "  reset: () => newGame(),\n"
+                    "  read:  () => ({ level: G.level, score: G.score, hp: G.hp }),\n"
+                    "  actions: () => [{ name: 'jump' }, { name: 'wait' }],\n"
+                    "  apply: (a) => a.name === 'jump' && tryJump(),\n"
+                    "  isOver: (s) => s.hp <= 0 || s.won, isWin: (s) => !!s.won,\n"
+                    "  key: (s) => ({ level: s.level, hp: s.hp }),   // 状态等价投影\n"
+                    "  snapshot: () => G.serialize(), restore: (st) => G.loadFrom(st)\n});\n```\n\n"
+                    "注册块行数**已实测**：11–48 行（中位数 29），非空非注释 11–44 行；"
+                    "现读 `python tools/adapter_linecount.py`（限定词不算测量，旧稿那句「约 20」已撤）。\n\n"
+                    "**兜底模式（0 行）** —— 什么都没写的游戏自动降级："
+                    "从可见文本、按钮 disabled 集合、输入框值、canvas 降采样像素指纹推断状态；"
+                    "从可交互元素 + 常用键集推断动作。本仓库 `games/clicker-quest/` 一行协议都没接，"
+                    "工具照样能发现那个没有 handler 的按钮并产出可回放复现包。\n\n"
+                    "## 已知限制（诚实清单）\n"
+                    "1. 虚拟时钟把时间量化到帧栅格 ⇒ 依赖真实墙钟做手感的（节拍、连招窗口）保真度下降。\n"
+                    "2. `crypto.getRandomValues` 不受种子控制 ⇒ 用它随机的游戏**不可复现**，工具会明说。\n"
+                    "3. WebGL canvas 像素指纹跨 GPU 未必逐位一致 ⇒ 兜底模式跨机复现强度弱于注册模式。\n"
+                    "4. 可达性探测受 horizon/预算限制；截断时不下强结论。\n"
+                    "5. 状态里带单调计数器又没声明 `key` 的游戏，探测会截断而非误判 —— 宁可不报也不乱报。\n"
+                    "6. iframe 内游戏需把 URL 指向内层 frame；跨域 iframe 不支持。",
+                    elem_classes=["panel"])
+        gr.Markdown(_static_evidence(), elem_classes=["panel", "evidence"])
+        gr.HTML("<div class='pt-footer'>PlayTest · 录屏不是证据，可复现才是 · MIT · evidence/corpus.json 现读</div>")
 
         scan_btn.click(do_scan, [game, arm, policy, seed], [embed, verdict, state_tbl, stream, pack_state]) \
             .then(lambda p: gr.update(value=p) if p else gr.update(), pack_state, pack_out)
@@ -394,4 +517,4 @@ def build() -> gr.Blocks:
 
 def launch(server_name: str = "0.0.0.0", server_port: int = 7860) -> None:
     build().launch(server_name=server_name, server_port=server_port,
-                   theme=gr.themes.Soft(), allowed_paths=[str(GAMES_DIR)])
+                   theme=_theme(), css=_CSS, allowed_paths=[str(GAMES_DIR)])
