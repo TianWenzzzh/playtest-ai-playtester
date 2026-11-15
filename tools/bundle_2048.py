@@ -26,6 +26,13 @@ def bundle() -> str:
         return f"<script>{js}</script>"
 
     html = re.sub(r'<script src="(js/[^"]+)"></script>', inline, html)
+    # 零接入自述标记：2048 无 GSPP 适配器，用兜底模式分析。adapter_linecount 据此归类
+    # zero_integration（0 行是设计，不是抽取失败），与其余零接入夹具同口径。
+    marker = "<!-- 没有任何 GSPP 相关代码：2048 演示用兜底模式零接入分析（MIT, Gabriele Cirulli） -->"
+    if "<head>" in html:
+        html = html.replace("<head>", "<head>\n" + marker, 1)
+    else:
+        html = marker + "\n" + html
     return html
 
 
