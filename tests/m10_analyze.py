@@ -84,11 +84,43 @@ def test_analyze_requests_large_token_budget():
 
 def test_bundled_2048_self_contained():
     # P1-1 回归门：srcdoc 内联产物不得含外部 @import 或非 data: url()（相对路径会 404）。
+    # P2-B 扩面：link/script src 同样是渲染依赖，悬空图标 link 也算非自包含。
     import re
     bundled = pathlib.Path(__file__).resolve().parent.parent / "games" / "2048" / "index.html"
     text = bundled.read_text(encoding="utf-8")
-    leftover = re.findall(r"@import[^;]+;|url\((?!['\"]?data:)[^)]+\)", text)
+    leftover = re.findall(
+        r"@import[^;]+;|url\((?!['\"]?data:)[^)]+\)"
+        r"|<link\b[^>]*href=\"(?!data:)[^>]*>|<script\b[^>]*src=", text)
     assert not leftover, f"bundled 2048 残留外部引用: {leftover[:5]}"
+    assert "<link" not in text, "bundled 2048 仍含 link（图标/启动图资产未打包，应剥离）"
+
+
+def test_bundled_2048_embeds_mit_license():
+    # P2-D：独立 srcdoc 分发须含完整 MIT 许可正文，不只署名标记。
+    text = (pathlib.Path(__file__).resolve().parent.parent / "games" / "2048" / "index.html").read_text(encoding="utf-8")
+    assert "Permission is hereby granted" in text, "产物未内嵌 MIT 许可正文"
+
+
+def test_read_sources_covers_core_logic():
+    # P2-C：截断预算必须覆盖全部核心游戏逻辑，输入/存储/瓦片不能被切掉。
+    from playtest.analyze import _read_sources
+    src = _read_sources(GAMES)
+    core = ("game_manager", "grid", "tile", "html_actuator", "keyboard_input_manager",
+            "local_storage_manager", "application")
+    missing = [c for c in core
+               if (GAMES / "js" / (c + ".js")).read_text(encoding="utf-8") not in src]
+    assert not missing, f"核心逻辑被截断预算切掉: {missing}"
+
+
+def test_degraded_wording_matches_cause():
+    # P2-A：available=True 但调用失败 ⇒ 措辞须说「调用失败」，不能误标「端点未配置」；
+    # available=False 才说「未配置」。两者都与横幅/summary 自洽。
+    c = FakeClient(None, available=True)
+    md = render_report_md(analyze_game(GAMES, None, c))
+    assert "未配置" not in md, "调用失败被误标为端点未配置"
+    assert "调用失败" in md
+    un = render_report_md(analyze_game(GAMES, None, FakeClient(None, available=False)))
+    assert "未配置" in un
 
 
 def test_upload_no_input():

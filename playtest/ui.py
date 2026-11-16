@@ -416,6 +416,26 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
 *::-webkit-scrollbar-thumb{background:var(--pt-border);border-radius:8px;border:2px solid var(--pt-bg);}
 *::-webkit-scrollbar-thumb:hover{background:var(--pt-accent);}
 .evidence{margin-top:16px!important;}
+/* 窄屏封存证据宽表在 prose 容器内横滚（表格保持 table 布局），不撑破页面。 */
+.evidence .prose{overflow-x:auto;}
+/* 窄屏：约束容器/列的 min-content，宽内容内部横滚或纵排，页面不横向溢出。 */
+@media (max-width:640px){
+  .wrap,.contain,.column,.rail,.stage-col,.block,.form{min-width:0!important;}
+  /* 滚动容器切断 min-content 向上传播，外壳（fit-content）才肯缩到视口宽。 */
+  .prose{overflow-x:auto!important;}
+  /* 宽表改固定布局＋单元格换行，min-content 不再撑破窄屏。 */
+  .evidence table{table-layout:fixed!important;width:100%!important;}
+  .evidence td,.evidence th{word-break:break-all!important;white-space:normal!important;}
+  .console{flex-direction:column!important;}
+  .rail,.stage-col{width:100%!important;flex:0 0 auto!important;}
+  .pt-header{flex-wrap:wrap!important;gap:10px!important;}
+  .pt-badges{margin-left:0!important;flex-wrap:wrap!important;}
+  .pt-hero{flex-wrap:wrap!important;}
+  .pt-guide-steps{flex-direction:column!important;}
+  .pt-gstep{min-width:0!important;width:100%!important;}
+  .rail input,.rail select,.rail .wrap-inner{min-width:0!important;max-width:100%!important;}
+  .console-tabs .tab-nav{flex-wrap:wrap!important;}
+}
 .pt-footer{margin-top:22px;text-align:center;color:var(--pt-muted);font:500 12px ui-monospace,'Cascadia Code',Consolas,monospace;}
 /* 强制深色：Gradio 残留浅色的标签 pill / 文件组件 / 上传区 */
 .label,label>span,.block-label,.file-preview label,.upload-container .label{background:transparent!important;color:var(--pt-muted)!important;border:none!important;}
@@ -507,6 +527,14 @@ textarea,.code-json{background:var(--pt-surface2)!important;border:1px solid var
   .pt-header,.pt-hero,.pt-guide,.status-banner,.rail,.stage-col,.console-tabs,.evidence{animation:none!important;}
 }
 """
+
+_MOBILE_HEAD = """<style>
+/* light-dom 外壳不受 Blocks(css=) 的 shadow 作用域管辖，窄屏宽度须在这里约束。 */
+@media (max-width:640px){
+  .gradio-container{width:100vw!important;max-width:100vw!important;min-width:0!important;}
+  .main.fillable{width:100%!important;max-width:100%!important;min-width:0!important;}
+}
+</style>"""
 
 _HEADER = """
 <div class="pt-header">
@@ -703,7 +731,7 @@ def build() -> gr.Blocks:
     names = game_names()
     arms = [(lbl, val) for lst in ARMS.values() for (lbl, val) in lst]
 
-    with gr.Blocks(title="PlayTest · AI 试玩员") as demo:
+    with gr.Blocks(title="PlayTest · AI 试玩员", head=_MOBILE_HEAD) as demo:
         gr.HTML(_HEADER)
         gr.HTML(_CREATOR_HERO)
         llm_banner = gr.Markdown(_llm_banner(), elem_classes=["status-banner"])

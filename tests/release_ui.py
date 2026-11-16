@@ -150,6 +150,18 @@ def open_tab(page: Any, name: str) -> None:
     page.get_by_role("tab", name=name, exact=True).click()
 
 
+def upload_report_issues(text: str) -> list[str]:
+    """P2-5：上传点击→分析必须真产出体检报告（File→str→analyze 接线回归门）。"""
+    if "AI 体检报告" not in text or "运行出错" in text:
+        return ["upload"]
+    return []
+
+
+def mobile_overflow_issues(scroll_width: int, client_width: int) -> list[str]:
+    """T3：窄屏页面级横向溢出（宽表应内部横滚，不撑破页面）。"""
+    return ["mobile-overflow"] if scroll_width > client_width else []
+
+
 def run_sequence(
     browser: Any,
     url: str,
@@ -248,6 +260,49 @@ def main() -> int:
                     check("禁用模型时横幅明示未配置", "推理端点未配置" in landing_text)
                     landing.close()
 
+                    # P2-5：真实上传点击→分析 e2e（本地 normal 无模型 ⇒ 报告走降级，仍须产出）。
+                    up = open_page(browser, url, all_errors)
+                    try:
+                        game_file = OUT / "upload-e2e-game.html"
+                        game_file.write_text(
+                            "<!doctype html><html><head><meta charset='utf-8'><title>t</title></head>"
+                            "<body><canvas id='c' width='200' height='150'></canvas><script>"
+                            "var n=0;var c=document.getElementById('c');var x=c.getContext('2d');"
+                            "function d(){x.fillStyle='#123';x.fillRect(0,0,200,150);x.fillStyle='#fff';"
+                            "x.fillText('n='+n,10,30);}c.addEventListener('click',function(){n++;d();});d();"
+                            "</script></body></html>", encoding="utf-8")
+                        up.locator('input[type="file"]').first.set_input_files(str(game_file))
+                        up.get_by_role("button", name="📤 上传并分析", exact=True).click()
+                        up_text = wait_body(up, ("AI 体检报告", "运行出错", "请上传"), timeout_s=180)
+                        up.screenshot(path=str(OUT / "05-upload-e2e.png"), full_page=True)
+                        check("上传点击→分析 e2e 产出体检报告", not upload_report_issues(up_text),
+                              up_text[up_text.find("AI 体检报告"):][:160]
+                              if "AI 体检报告" in up_text else up_text[-160:])
+                        check("负控：缺报告/运行出错判红，有报告沉默",
+                              upload_report_issues("没有报告") == ["upload"]
+                              and upload_report_issues("运行出错") == ["upload"]
+                              and upload_report_issues("AI 体检报告 ok") == [])
+                    finally:
+                        up.close()
+
+                    # T3：移动 375px 页面级横向溢出（封存证据宽表须内部横滚）。
+                    mob = browser.new_page(viewport={"width": 375, "height": 700})
+                    attach_error_recorder(mob, all_errors)
+                    mob.goto(url, wait_until="domcontentloaded", timeout=90_000)
+                    mob.get_by_role("button", name="① 开始试玩", exact=True).wait_for(
+                        state="visible", timeout=60_000)
+                    mob.wait_for_timeout(1200)
+                    mw = mob.evaluate(
+                        "()=>({sw:document.documentElement.scrollWidth,"
+                        "cw:document.documentElement.clientWidth})")
+                    mob.screenshot(path=str(OUT / "06-mobile-375.png"), full_page=True)
+                    check("移动 375px 页面无横向溢出",
+                          not mobile_overflow_issues(mw["sw"], mw["cw"]), f"sw={mw['sw']} cw={mw['cw']}")
+                    check("负控：超宽判红、等宽沉默",
+                          mobile_overflow_issues(500, 375) == ["mobile-overflow"]
+                          and mobile_overflow_issues(375, 375) == [])
+                    mob.close()
+
                     for name, policy, seed in (
                         ("A-curiosity", "curiosity", 20261105),
                         ("B-clue", "clue", 20261106),
@@ -313,8 +368,8 @@ def main() -> int:
         "ok": not failed,
         "checks": RESULTS,
         "artifacts": str(OUT),
-        "visual_scope": ["桌面首屏", "两条扫描/回放/修复态", "Chromium 故障态"],
-        "not_tested": ["窄屏", "打印面", "公开创空间"],
+        "visual_scope": ["桌面首屏", "两条扫描/回放/修复态", "Chromium 故障态", "上传点击e2e", "移动375px"],
+        "not_tested": ["打印面", "公开创空间"],
     }
     (OUT / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8",

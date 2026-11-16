@@ -34,11 +34,13 @@ class AnalysisReport:
     play_stats: dict = field(default_factory=dict)
     degraded: bool = False
     degrade_reason: str = ""
+    unconfigured: bool = False
 
 
-def _read_sources(game_dir: Path, limit: int = 14000) -> str:
+def _read_sources(game_dir: Path, limit: int = 22000) -> str:
     # 优先核心游戏逻辑（玩法/平衡/输入/渲染），polyfill 与 HTML/CSS 排后，
     # 避免截断预算被兼容代码吃掉、读不到真正的游戏机制。
+    # 22000 覆盖 2048 全部核心 js（实测合计 ≈20746 含头/分隔），输入/存储/瓦片不再被切。
     core = ("game_manager", "grid", "tile", "html_actuator", "keyboard_input_manager",
             "local_storage_manager", "application")
 
@@ -81,7 +83,8 @@ def analyze_game(game_dir: Path, episode: Any, client: LLMClient) -> AnalysisRep
     if not client.cfg.available():
         return AnalysisReport(summary="（模型端点未配置，仅给出确定性检测；优化建议需配置模型）",
                               detected_issues=detected, play_stats=stats,
-                              degraded=True, degrade_reason=client.cfg.reason_unavailable())
+                              degraded=True, degrade_reason=client.cfg.reason_unavailable(),
+                              unconfigured=True)
     obs = {"stats": stats, "defect": detected[0] if detected else None,
            "render_note": getattr(episode, "render_note", "") if episode else ""}
     raw = client.complete(_prompt(_read_sources(game_dir), obs), force_json=True, max_tokens=2000)
@@ -117,7 +120,10 @@ def render_report_md(r: AnalysisReport) -> str:
     lines.append("")
     lines.append("### 💡 优化建议（AI 建议·供参考）")
     if r.degraded:
-        lines.append(f"- ⚠️ 模型端点未配置，优化建议暂不可用（{r.degrade_reason}）。")
+        if r.unconfigured:
+            lines.append(f"- ⚠️ 模型端点未配置，优化建议暂不可用（{r.degrade_reason}）。")
+        else:
+            lines.append(f"- ⚠️ 模型调用失败，优化建议暂不可用（{r.degrade_reason}）。")
     elif r.suggestions:
         for s in r.suggestions:
             lines.append(f"- **[{s.category}·{s.priority}]** {s.problem} → {s.suggestion}（`{s.code_ref}`）")
