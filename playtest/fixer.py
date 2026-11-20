@@ -93,7 +93,7 @@ class LLMProposer:
         from .llm import parse_json_object
 
         for _ in range(2):
-            raw = self.client.complete(messages)
+            raw = self.client.complete(messages, max_tokens=2000)
             obj = parse_json_object(raw)
             if obj and obj.get("path") and "old" in obj and "new" in obj:
                 break

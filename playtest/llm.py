@@ -125,7 +125,8 @@ class LLMClient:
             detail = exc.read().decode("utf-8", "replace")
             self.stat.last_error = f"HTTPError {exc.code}: {detail}"[:200]
             return None
-        except (urllib.error.URLError, KeyError, json.JSONDecodeError, TimeoutError) as exc:
+        except (urllib.error.URLError, ConnectionResetError, ConnectionAbortedError,
+                BrokenPipeError, TimeoutError, KeyError, json.JSONDecodeError) as exc:
             self.stat.failures += 1
             self.stat.last_error = f"{type(exc).__name__}: {exc}"[:200]
             return None

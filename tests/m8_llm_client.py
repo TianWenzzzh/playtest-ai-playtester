@@ -16,6 +16,7 @@ import pathlib
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -52,7 +53,9 @@ class _Handler(BaseHTTPRequestHandler):
             payload = json.dumps({"error": {"message": "response_format json_object is not supported by this model"}}).encode("utf-8")
             self.send_response(400)
         else:
-            content = json.dumps({"action": "jump", "reason": "ok"}, ensure_ascii=False)
+            content = (json.dumps({"path": "index.html", "old": "gap=6", "new": "gap=3"})
+                       if st.get("patch_budget") and body["max_tokens"] >= 2000
+                       else "" if st.get("patch_budget") else json.dumps({"action": "jump", "reason": "ok"}, ensure_ascii=False))
             payload = json.dumps({"choices": [{"message": {"content": content}}],
                                   "usage": {"prompt_tokens": 5, "completion_tokens": 7}}).encode("utf-8")
             self.send_response(200)
@@ -101,6 +104,20 @@ def main() -> int:
               c3.stat.last_error)
         check("失败计数计满", c3.stat.failures == 1 and c3.stat.calls == 1,
               f"calls={c3.stat.calls} failures={c3.stat.failures}")
+        print("== 4. 补丁生成不得用 400-token 默认预算（推理会吃光正文）==")
+        from playtest.fixer import LLMProposer
+
+        srv.state["reject_rf"] = False
+        srv.state["patch_budget"] = True
+        srv.state["bodies"].clear()
+        c_patch = LLMClient(LLMConfig(base_url=base, api_key="test-key", model="test-model"))
+        pack = {"defect": {"kind": "unwinnable", "signature": "test"},
+                "initial_state": {"seed": 1}}
+        proposed = LLMProposer(c_patch).propose(pack, {"index.html": "gap=6"})
+        check("补丁正文能产生精确替换，而非空输出后盲重试",
+              proposed is not None and proposed["old"] == "gap=6" and proposed["new"] == "gap=3")
+        check("补丁请求留足输出预算", bool(srv.state["bodies"]) and
+              all(b["max_tokens"] >= 2000 for b in srv.state["bodies"]))
     finally:
         srv.shutdown()
         srv.server_close()
@@ -109,7 +126,22 @@ def main() -> int:
     # 浏览器 UA＋直连，零魔粒消耗）。旧默认 Qwen3-30B-A3B-Instruct-2507 已被端点下架 ⇒ 每次 complete()
     # 回 HTTP 400 "Model id"，llm_hits 恒 0、决策表全是 llm_invalid+fallback 配对。这条判据钉住
     # "默认必须是现役可用 ID"；名册会随版本变，过期时重抓夹具（不是放宽判据）。
-    print("== 4. 默认模型必须是魔搭 API Inference 现役名册里的 ID ==")
+    print("== 5. 远端断线必须计入失败并回退，不能炸掉整局 ==")
+    c4 = LLMClient(LLMConfig(base_url=base, api_key="test-key", model="test-model"))
+    with patch("playtest.llm.urllib.request.urlopen", side_effect=ConnectionResetError(10054, "remote closed")):
+        out4 = c4.complete(msgs)
+    check("连接重置时返回 None 并留下错误类别",
+          out4 is None and c4.stat.failures == 1 and "ConnectionResetError" in c4.stat.last_error)
+    c_local = LLMClient(LLMConfig(base_url=base, api_key="test-key", model="test-model"))
+    try:
+        with patch("playtest.llm.urllib.request.urlopen", side_effect=OSError(9, "bad file descriptor")):
+            c_local.complete(msgs)
+    except OSError as exc:
+        check("本地 OSError 不伪装成模型调用失败", exc.errno == 9)
+    else:
+        check("本地 OSError 不伪装成模型调用失败", False)
+
+    print("== 6. 默认模型必须是魔搭 API Inference 现役名册里的 ID ==")
     fixture = pathlib.Path(__file__).resolve().parent / "fixtures" / "modelscope_models_20261107.json"
     roster = {m["id"] for m in json.loads(fixture.read_text(encoding="utf-8"))["data"]}
     check("名册非空（防夹具被掏空后 membership 判据永真）", len(roster) >= 1, f"n={len(roster)}")
@@ -126,7 +158,7 @@ def main() -> int:
     # （t3b run4/run5 各 2 次重试全 TimeoutError ⇒ "llm 未给出补丁/仍然红"），
     # 而玩法小 prompt ~22s 能过 ⇒ 30s 默认对 proposer 系统性偏短。
     # from_env 默认放宽到 90s，并允许 PLAYTEST_LLM_TIMEOUT 覆盖（Spark/本地可另调）。
-    print("== 5. 客户端超时默认要够共享端点 proposer 用，且可 env 覆盖 ==")
+    print("== 7. 客户端超时默认要够共享端点 proposer 用，且可 env 覆盖 ==")
     saved_to = os.environ.pop("PLAYTEST_LLM_TIMEOUT", None)
     try:
         default_to = LLMConfig.from_env().timeout_s
